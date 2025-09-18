@@ -170,12 +170,28 @@ app.get("/dashboard/doctor", (req, res) => {
     } else {
         doctorQueueStatus[userId].totalPatients = todayAppointments.length;
     }
+    
+    const queue = doctorQueueStatus[userId];
+
+    // Find the next available patients, skipping any marked as "Absent"
+    const availableAppointments = todayAppointments.filter(
+        app => app.queueNumber > queue.currentNumber && app.status !== 'Absent'
+    );
+    const currentPatient = availableAppointments[0] || null;
+    const nextPatient = availableAppointments[1] || null;
 
     const schedules = doctorSchedules.filter(s => s.doctorId == userId).map(s => ({
         ...s, clinic: clinics.find(c => c.id === s.clinicId)
     }));
 
-    res.render("doctor-dashboard.ejs", { doctor, appointments: todayAppointments, schedules, queue: doctorQueueStatus[userId] });
+    res.render("doctor-dashboard.ejs", { 
+        doctor, 
+        appointments: todayAppointments, 
+        schedules, 
+        queue,
+        currentPatient, // Pass the correct current patient
+        nextPatient // Pass the correct next patient
+    });
 });
 
 app.get("/dashboard/receptionist", (req, res) => {
@@ -225,6 +241,19 @@ app.post("/book-appointment", (req, res) => {
     const patient = patients.find(p => p.id == patientId);
     const clinic = clinics.find(c => c.id == clinicId);
 
+    // --- Daily Limit Check ---
+    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
+    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Book failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>-er ${date} all cpmplete (<strong>${doctor.dailyLimit}</strong>) shesh hoye geche.</p>
+                <p style="margin-top: 0.5rem;">Onugroho kore onno kono din ba onno doctor-er jonno chesta korun.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Pichone Jaan</a>
+            </div>
+        `);
+    }
+
     const queueNumber = getNextQueueNumber(doctorId, date);
 
     // Calculate approx time = doctor start time + (queueNumber-1)*consultationDuration
@@ -270,14 +299,28 @@ app.post("/doctor/set-limit", (req, res) => {
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
-app.post("/doctor/next-patient", (req, res) => {
+// --- NEW ROUTE: Clear Today's Appointments ---
+app.post("/doctor/clear-list", (req, res) => {
     const { doctorId } = req.body;
-    const queue = doctorQueueStatus[doctorId];
-    if (queue && queue.currentNumber < queue.totalPatients) {
-        queue.currentNumber++;
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Filter out today's appointments for this doctor from the main list
+    appointments = appointments.filter(app => 
+        !(app.doctorId == doctorId && app.date === today)
+    );
+
+    // Also reset the queue status for this doctor
+    if (doctorQueueStatus[doctorId]) {
+        doctorQueueStatus[doctorId] = { 
+            currentNumber: 0, 
+            totalPatients: 0, 
+            date: today 
+        };
     }
+
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
+
 
 // --- Admin Actions ---
 app.post("/admin/add-doctor", (req, res) => {
@@ -348,6 +391,19 @@ app.post("/admin/add-appointment", (req, res) => {
     const patient = patients.find(p => p.id == patientId);
     const doctor = doctors.find(d => d.id == doctorId);
     const clinic = clinics.find(c => c.id == clinicId);
+
+    // --- Daily Limit Check ---
+    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
+    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Booking Sompurno Hoyni</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">Dukkhito, <strong>Dr. ${doctor.name}</strong>-er ${date} tarikh-er jonno patient dekhar shima (<strong>${doctor.dailyLimit}</strong>) shesh hoye geche.</p>
+                <p style="margin-top: 0.5rem;">Onugroho kore onno kono din ba onno doctor-er jonno chesta korun.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Pichone Jaan</a>
+            </div>
+        `);
+    }
 
     appointments.push({
         id: ++last_appointment_id,
@@ -462,6 +518,19 @@ app.post("/receptionist/add-appointment", (req, res) => {
 
     if (!doctor || !clinic) return res.status(404).send("Doctor or clinic not found");
 
+    // --- Daily Limit Check ---
+    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
+    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Booking Sompurno Hoyni</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">Dukkhito, <strong>Dr. ${doctor.name}</strong>-er ${date} tarikh-er jonno patient dekhar shima (<strong>${doctor.dailyLimit}</strong>) shesh hoye geche.</p>
+                <p style="margin-top: 0.5rem;">Onugroho kore onno kono din ba onno doctor-er jonno chesta korun.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Pichone Jaan</a>
+            </div>
+        `);
+    }
+
     // Add appointment
     const newAppointment = {
         id: ++last_appointment_id,
@@ -482,19 +551,15 @@ app.post("/receptionist/add-appointment", (req, res) => {
     res.redirect(`/receptionist/doctor-appointments/${doctorId}`);
 });
 
-// Fixed Enhanced Doctor Queue Management Routes
-// Add these routes to your server.js file
-
+// --- UPDATED Doctor Queue Management Route ---
 app.post("/doctor/next-patient", (req, res) => {
     const { doctorId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
     
-    // Get today's appointments for this doctor
     const todayAppointments = appointments.filter(app => 
         app.doctorId == doctorId && app.date === today
-    ).sort((a, b) => a.queueNumber - b.queueNumber); // Sort by queue number
+    ).sort((a, b) => a.queueNumber - b.queueNumber);
     
-    // Initialize queue if it doesn't exist or is from a different date
     if (!doctorQueueStatus[doctorId] || doctorQueueStatus[doctorId].date !== today) {
         doctorQueueStatus[doctorId] = { 
             currentNumber: 0, 
@@ -504,26 +569,27 @@ app.post("/doctor/next-patient", (req, res) => {
     }
     
     const queue = doctorQueueStatus[doctorId];
-    
-    // Update total patients count in case new appointments were added
     queue.totalPatients = todayAppointments.length;
     
-    // Move to next patient only if not at the end
-    if (queue.currentNumber < queue.totalPatients) {
-        queue.currentNumber++;
+    // Find the next available (not absent) patient to be seen
+    const nextAvailablePatient = todayAppointments.find(app => 
+        app.queueNumber > queue.currentNumber && app.status !== 'Absent'
+    );
+
+    if (nextAvailablePatient) {
+        // Update the current number to the number of the patient being marked as done
+        queue.currentNumber = nextAvailablePatient.queueNumber;
         
-        // Automatically mark the completed patient as "Done"
-        const completedAppointment = todayAppointments.find(app => 
-            app.queueNumber === queue.currentNumber
-        );
-        
-        if (completedAppointment && completedAppointment.status !== 'Done' && completedAppointment.status !== 'Absent') {
-            completedAppointment.status = 'Done';
-        }
+        // Mark this patient's status as 'Done'
+        nextAvailablePatient.status = 'Done';
+    } else {
+        // If no more available patients, set current number to total to show completion
+        queue.currentNumber = queue.totalPatients;
     }
     
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
+
 
 app.post("/doctor/reset-queue", (req, res) => {
     const { doctorId } = req.body;
@@ -543,7 +609,7 @@ app.post("/doctor/reset-queue", (req, res) => {
     
     // Reset all appointments status back to 'Confirmed' (optional)
     todayAppointments.forEach(app => {
-        if (app.status === 'Done') {
+        if (app.status === 'Done' || app.status === 'Absent') {
             app.status = 'Confirmed';
         }
     });
@@ -575,14 +641,14 @@ app.get("/api/queue-status/:doctorId", (req, res) => {
         queue.totalPatients = todayAppointments.length;
     }
     
-    // Get current patient info (next to be served)
+    // Get current patient info (next to be served), skipping absent ones
     const currentPatient = todayAppointments.find(app => 
-        app.queueNumber === (queue.currentNumber + 1)
+        app.queueNumber > queue.currentNumber && app.status !== 'Absent'
     );
     
-    // Get next patient info (after current)
+    // Get next patient info (after current), also skipping absent ones
     const nextPatient = todayAppointments.find(app => 
-        app.queueNumber === (queue.currentNumber + 2)
+        currentPatient && app.queueNumber > currentPatient.queueNumber && app.status !== 'Absent'
     );
     
     res.json({
@@ -720,3 +786,4 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
+

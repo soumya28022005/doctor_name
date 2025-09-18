@@ -176,15 +176,23 @@
             </div>
         </div>
 
-        <!-- Reset Queue Button (Emergency) -->
+        <!-- Controls -->
         <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e2e8f0;">
-            <h4 style="color: #ef4444;">Emergency Controls</h4>
+            <h4 style="color: #f59e0b;">Controls</h4>
             <form action="/doctor/reset-queue" method="POST" 
-                  onsubmit="return confirm('Are you sure you want to reset the queue? This action cannot be undone.')">
+                  onsubmit="return confirm('Apni ki queue counter abar shuru theke start korte chan? Eti shudhu patient number-ke 0 korbe, list muche debe na.')" style="margin-bottom: 1rem;">
                 <input type="hidden" name="doctorId" value="<%= doctor.id %>">
                 <button type="submit" class="btn" 
-                        style="background: linear-gradient(135deg, #ef4444, #dc2626); font-size: 0.9rem;">
-                    🔄 Reset Queue (Emergency Only)
+                        style="background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 0.9rem; width: 100%;">
+                    🔄 Queue Counter Reset
+                </button>
+            </form>
+            <form action="/doctor/clear-list" method="POST" 
+                  onsubmit="return confirm('Sotorkota! Apni ki ajker shob appointment muche felte chan? Ei kaaj-ti ferano jabe na.')">
+                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                <button type="submit" class="btn" 
+                        style="background: linear-gradient(135deg, #ef4444, #dc2626); font-size: 0.9rem; width: 100%;">
+                    🗑️ Clear Today's List
                 </button>
             </form>
         </div>
@@ -203,10 +211,7 @@
 
     // Show confirmation for next patient button
     document.querySelector('form[action="/doctor/next-patient"]').addEventListener('submit', function(e) {
-        const currentNumber = document.getElementById('currentNumber').textContent;
-        const nextNumber = parseInt(currentNumber) + 1;
-        
-        if (!confirm(`Mark patient #${nextNumber} as completed and call next patient?`)) {
+        if (!confirm(`Apni ki poroborti patient-ke deke nite nishchit?`)) {
             e.preventDefault();
         }
     });
