@@ -2,54 +2,213 @@
 
 <div class="dashboard-header">
     <h1>Welcome, Dr. <%= doctor.name %></h1>
-    <p>Manage your appointments and schedule.</p>
+    <p>Manage your appointments and queue.</p>
 </div>
 
 <div class="dashboard-grid">
+    <!-- Enhanced Queue Management Card -->
     <div class="card">
-        <h3>Your Appointments</h3>
+        <h3>Live Queue Management</h3>
+        
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: center;">
+            <h2 style="margin: 0; font-size: 2.5rem;">Currently Serving</h2>
+            <div style="font-size: 4rem; font-weight: bold; margin: 1rem 0;">
+                #<span id="currentNumber"><%= queue.currentNumber || 0 %></span>
+            </div>
+            <p style="margin: 0; font-size: 1.2rem; opacity: 0.9;">
+                Total Today: <%= queue.totalPatients || 0 %> patients
+            </p>
+        </div>
+
+        <!-- Current Patient Info -->
+        <% 
+        const currentPatient = appointments.find(app => app.queueNumber === (queue.currentNumber + 1));
+        const nextPatient = appointments.find(app => app.queueNumber === (queue.currentNumber + 2));
+        %>
+        
+        <% if (currentPatient) { %>
+            <div style="background: #f0f9ff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #0ea5e9; margin-bottom: 1rem;">
+                <h4 style="color: #0ea5e9; margin-bottom: 0.5rem;">Next Patient</h4>
+                <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                    <%= currentPatient.patientName %> (Queue #<%= currentPatient.queueNumber %>)
+                </p>
+                <p style="margin: 0.5rem 0 0 0; color: #64748b;">
+                    Scheduled: <%= currentPatient.time %> | Status: <%= currentPatient.status %>
+                </p>
+            </div>
+        <% } %>
+
+        <% if (nextPatient) { %>
+            <div style="background: #fefce8; padding: 1rem; border-radius: 8px; border-left: 4px solid #eab308; margin-bottom: 1.5rem;">
+                <h5 style="color: #eab308; margin-bottom: 0.5rem;">Up Next</h5>
+                <p style="margin: 0;">
+                    <%= nextPatient.patientName %> (Queue #<%= nextPatient.queueNumber %>)
+                </p>
+            </div>
+        <% } %>
+
+        <!-- Queue Control Buttons -->
+        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <form action="/doctor/next-patient" method="POST" style="flex: 1;">
+                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                <button type="submit" class="btn" 
+                        style="width: 100%; background: linear-gradient(135deg, #10b981, #059669); font-size: 1.1rem; padding: 1rem;"
+                        <%= (queue.currentNumber >= queue.totalPatients) ? 'disabled' : '' %>>
+                    ✅ Patient Done - Next Please
+                </button>
+            </form>
+        </div>
+
+        <!-- Queue Progress Bar -->
+        <div style="background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: <%= queue.totalPatients > 0 ? (queue.currentNumber / queue.totalPatients) * 100 : 0 %>%; transition: width 0.3s ease;"></div>
+        </div>
+        <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin: 0;">
+            Progress: <%= queue.currentNumber %> of <%= queue.totalPatients %> patients completed
+        </p>
+    </div>
+
+    <!-- Appointments List -->
+    <div class="card">
+        <h3>Today's Appointments Queue</h3>
         <% if(appointments.length > 0) { %>
-            <% appointments.forEach(app => { %>
-                <div class="appointment-item">
-                    <strong>Patient: <%= app.patientName %></strong> (Queue: <%= app.queueNumber %>)<br>
-                    Date: <%= app.date %> at <%= app.time %><br>
-                    Status: <%= app.status %><br>
-                    <form action="/doctor/update-appointment-status" method="POST" style="display: inline;">
-                        <input type="hidden" name="doctorId" value="<%= doctor.id %>">
-                        <input type="hidden" name="appointmentId" value="<%= app.id %>">
-                        <select name="status" onchange="this.form.submit()">
-                            <option value="Confirmed" <%= app.status === 'Confirmed' ? 'selected' : '' %>>Confirmed</option>
-                            <option value="Waiting" <%= app.status === 'Waiting' ? 'selected' : '' %>>Waiting</option>
-                            <option value="Done" <%= app.status === 'Done' ? 'selected' : '' %>>Done</option>
-                            <option value="Absent" <%= app.status === 'Absent' ? 'selected' : '' %>>Absent</option>
-                        </select>
-                    </form>
-                </div>
-            <% }) %>
+            <div style="max-height: 500px; overflow-y: auto;">
+                <% appointments.forEach(app => { %>
+                    <div class="appointment-item"
+                         style = "<%= app.queueNumber <= queue.currentNumber ? 'background: #dcfce7; border-left: 4px solid #22c55e;' : app.queueNumber === (queue.currentNumber + 1) ? 'background: #dbeafe; border-left: 4px solid #3b82f6;' : '' %>">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <span style="background: <%= app.queueNumber <= queue.currentNumber ? '#22c55e' : app.queueNumber === (queue.currentNumber + 1) ? '#3b82f6' : '#64748b' %>; 
+                                                 color: white; 
+                                                 padding: 0.25rem 0.75rem; 
+                                                 border-radius: 20px; 
+                                                 font-weight: bold; 
+                                                 font-size: 0.9rem;">
+                                        #<%= app.queueNumber %>
+                                    </span>
+                                    <strong style="font-size: 1.1rem;"><%= app.patientName %></strong>
+                                    <% if (app.queueNumber <= queue.currentNumber) { %>
+                                        <span style="color: #22c55e; font-size: 0.9rem;">✅ Done</span>
+                                    <% } else if (app.queueNumber === (queue.currentNumber + 1)) { %>
+                                        <span style="color: #3b82f6; font-size: 0.9rem; font-weight: bold;">👆 Current</span>
+                                    <% } %>
+                                </div>
+                                
+                                <div style="color: #64748b; font-size: 0.95rem;">
+                                    Scheduled: <%= app.time %> | Status: 
+                                    <span style="color: <%= app.status === 'Done' ? '#22c55e' : app.status === 'Confirmed' ? '#3b82f6' : '#f59e0b' %>;">
+                                        <%= app.status %>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Status Update Form -->
+                            <form action="/doctor/update-appointment-status" method="POST" style="margin-left: 1rem;">
+                                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                                <input type="hidden" name="appointmentId" value="<%= app.id %>">
+                                <select name="status" onchange="this.form.submit()" 
+                                        style="padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid #d1d5db; font-size: 0.9rem;">
+                                    <option value="Confirmed" <%= app.status === 'Confirmed' ? 'selected' : '' %>>Confirmed</option>
+                                    <option value="Waiting" <%= app.status === 'Waiting' ? 'selected' : '' %>>Waiting</option>
+                                    <option value="Done" <%= app.status === 'Done' ? 'selected' : '' %>>Done</option>
+                                    <option value="Absent" <%= app.status === 'Absent' ? 'selected' : '' %>>Absent</option>
+                                </select>
+                            </form>
+                        </div>
+                    </div>
+                <% }) %>
+            </div>
         <% } else { %>
-            <p>No appointments today.</p>
+            <div style="text-align: center; padding: 3rem; color: #64748b;">
+                <p style="font-size: 1.2rem; margin: 0;">No appointments scheduled for today</p>
+                <p style="margin: 0.5rem 0 0 0;">Enjoy your free time! 😊</p>
+            </div>
         <% } %>
     </div>
 
+    <!-- Doctor Settings -->
     <div class="card">
-        <h3>Your Schedule</h3>
-        <ul class="appointment-list">
-            <% schedules.forEach(schedule => { %>
-                <li class="appointment-item">
-                    <strong><%= schedule.clinic.name %></strong><br>
-                    <%= schedule.startTime %> - <%= schedule.endTime %><br>
-                    <small><%= schedule.days %></small>
-                </li>
-            <% }) %>
-        </ul>
-        <hr>
-        <h4>Set Daily Patient Limit</h4>
-        <form action="/doctor/set-limit" method="POST">
-            <input type="hidden" name="doctorId" value="<%= doctor.id %>">
-            <input type="number" name="dailyLimit" value="<%= doctor.dailyLimit %>" required>
-            <button type="submit" class="btn">Set Limit</button>
-        </form>
+        <h3>Your Schedule & Settings</h3>
+        
+        <!-- Schedule Info -->
+        <div style="margin-bottom: 2rem;">
+            <h4 style="color: #374151; margin-bottom: 1rem;">Today's Schedule</h4>
+            <ul class="appointment-list">
+                <% schedules.forEach(schedule => { %>
+                    <li class="appointment-item">
+                        <strong><%= schedule.clinic.name %></strong><br>
+                        <%= schedule.startTime %> - <%= schedule.endTime %><br>
+                        <small><%= schedule.days %></small>
+                    </li>
+                <% }) %>
+            </ul>
+        </div>
+
+        <!-- Settings Forms -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <!-- Daily Limit -->
+            <div>
+                <h4>Daily Patient Limit</h4>
+                <form action="/doctor/set-limit" method="POST">
+                    <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" name="dailyLimit" value="<%= doctor.dailyLimit %>" 
+                               style="flex: 1; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;" required>
+                        <button type="submit" class="btn btn-small">Set</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Consultation Duration -->
+            <div>
+                <h4>Consultation Time (minutes)</h4>
+                <form action="/doctor/set-consultation-time" method="POST">
+                    <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" name="duration" value="<%= doctor.consultationDuration || 15 %>" 
+                               style="flex: 1; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;" required>
+                        <button type="submit" class="btn btn-small">Set</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Reset Queue Button (Emergency) -->
+        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e2e8f0;">
+            <h4 style="color: #ef4444;">Emergency Controls</h4>
+            <form action="/doctor/reset-queue" method="POST" 
+                  onsubmit="return confirm('Are you sure you want to reset the queue? This action cannot be undone.')">
+                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                <button type="submit" class="btn" 
+                        style="background: linear-gradient(135deg, #ef4444, #dc2626); font-size: 0.9rem;">
+                    🔄 Reset Queue (Emergency Only)
+                </button>
+            </form>
+        </div>
     </div>
 </div>
+
+<!-- Auto-refresh for live updates -->
+<script>
+    // Auto-refresh every 30 seconds to keep queue status updated
+    setInterval(() => {
+        // Only refresh if the page is visible (not in background tab)
+        if (document.visibilityState === 'visible') {
+            window.location.reload();
+        }
+    }, 30000);
+
+    // Show confirmation for next patient button
+    document.querySelector('form[action="/doctor/next-patient"]').addEventListener('submit', function(e) {
+        const currentNumber = document.getElementById('currentNumber').textContent;
+        const nextNumber = parseInt(currentNumber) + 1;
+        
+        if (!confirm(`Mark patient #${nextNumber} as completed and call next patient?`)) {
+            e.preventDefault();
+        }
+    });
+</script>
 
 <%- include('partials/footer.ejs') %>

@@ -482,7 +482,236 @@ app.post("/receptionist/add-appointment", (req, res) => {
     res.redirect(`/receptionist/doctor-appointments/${doctorId}`);
 });
 
+// Fixed Enhanced Doctor Queue Management Routes
+// Add these routes to your server.js file
 
+app.post("/doctor/next-patient", (req, res) => {
+    const { doctorId } = req.body;
+    const today = new Date().toISOString().slice(0, 10);
+    
+    // Get today's appointments for this doctor
+    const todayAppointments = appointments.filter(app => 
+        app.doctorId == doctorId && app.date === today
+    ).sort((a, b) => a.queueNumber - b.queueNumber); // Sort by queue number
+    
+    // Initialize queue if it doesn't exist or is from a different date
+    if (!doctorQueueStatus[doctorId] || doctorQueueStatus[doctorId].date !== today) {
+        doctorQueueStatus[doctorId] = { 
+            currentNumber: 0, 
+            totalPatients: todayAppointments.length, 
+            date: today 
+        };
+    }
+    
+    const queue = doctorQueueStatus[doctorId];
+    
+    // Update total patients count in case new appointments were added
+    queue.totalPatients = todayAppointments.length;
+    
+    // Move to next patient only if not at the end
+    if (queue.currentNumber < queue.totalPatients) {
+        queue.currentNumber++;
+        
+        // Automatically mark the completed patient as "Done"
+        const completedAppointment = todayAppointments.find(app => 
+            app.queueNumber === queue.currentNumber
+        );
+        
+        if (completedAppointment && completedAppointment.status !== 'Done' && completedAppointment.status !== 'Absent') {
+            completedAppointment.status = 'Done';
+        }
+    }
+    
+    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+});
+
+app.post("/doctor/reset-queue", (req, res) => {
+    const { doctorId } = req.body;
+    const today = new Date().toISOString().slice(0, 10);
+    
+    // Get today's appointments
+    const todayAppointments = appointments.filter(app => 
+        app.doctorId == doctorId && app.date === today
+    );
+    
+    // Reset queue to beginning
+    doctorQueueStatus[doctorId] = {
+        currentNumber: 0,
+        totalPatients: todayAppointments.length,
+        date: today
+    };
+    
+    // Reset all appointments status back to 'Confirmed' (optional)
+    todayAppointments.forEach(app => {
+        if (app.status === 'Done') {
+            app.status = 'Confirmed';
+        }
+    });
+    
+    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+});
+
+// Enhanced API endpoint for real-time queue status
+app.get("/api/queue-status/:doctorId", (req, res) => {
+    const { doctorId } = req.params;
+    const today = new Date().toISOString().slice(0, 10);
+    
+    // Get today's appointments for this doctor
+    const todayAppointments = appointments.filter(app => 
+        app.doctorId == doctorId && app.date === today
+    ).sort((a, b) => a.queueNumber - b.queueNumber);
+    
+    let queue = doctorQueueStatus[doctorId];
+    
+    // Initialize if doesn't exist or different date
+    if (!queue || queue.date !== today) {
+        queue = doctorQueueStatus[doctorId] = { 
+            currentNumber: 0, 
+            totalPatients: todayAppointments.length, 
+            date: today 
+        };
+    } else {
+        // Update total patients count
+        queue.totalPatients = todayAppointments.length;
+    }
+    
+    // Get current patient info (next to be served)
+    const currentPatient = todayAppointments.find(app => 
+        app.queueNumber === (queue.currentNumber + 1)
+    );
+    
+    // Get next patient info (after current)
+    const nextPatient = todayAppointments.find(app => 
+        app.queueNumber === (queue.currentNumber + 2)
+    );
+    
+    res.json({
+        currentNumber: queue.currentNumber,
+        totalPatients: queue.totalPatients,
+        date: queue.date,
+        currentPatient: currentPatient ? {
+            name: currentPatient.patientName,
+            queueNumber: currentPatient.queueNumber,
+            time: currentPatient.time,
+            status: currentPatient.status
+        } : null,
+        nextPatient: nextPatient ? {
+            name: nextPatient.patientName,
+            queueNumber: nextPatient.queueNumber,
+            time: nextPatient.time,
+            status: nextPatient.status
+        } : null,
+        isCompleted: queue.currentNumber >= queue.totalPatients,
+        allAppointments: todayAppointments.map(app => ({
+            queueNumber: app.queueNumber,
+            patientName: app.patientName,
+            status: app.status,
+            time: app.time
+        }))
+    });
+});
+
+// Enhanced patient queue status API
+app.get("/api/patient-queue-status/:patientId", (req, res) => {
+    const { patientId } = req.params;
+    const today = new Date().toISOString().slice(0, 10);
+    
+    // Find patient's appointment today
+    const patientAppointment = appointments.find(app => 
+        app.patientId == patientId && app.date === today
+    );
+    
+    if (!patientAppointment) {
+        return res.json({ 
+            hasAppointment: false,
+            message: "No appointment found for today"
+        });
+    }
+    
+    const doctorId = patientAppointment.doctorId;
+    let queue = doctorQueueStatus[doctorId];
+    
+    // Initialize queue if it doesn't exist
+    if (!queue || queue.date !== today) {
+        const todayAppointments = appointments.filter(app => 
+            app.doctorId == doctorId && app.date === today
+        );
+        
+        queue = doctorQueueStatus[doctorId] = { 
+            currentNumber: 0, 
+            totalPatients: todayAppointments.length, 
+            date: today 
+        };
+    }
+    
+    const patientsAhead = Math.max(0, patientAppointment.queueNumber - queue.currentNumber - 1);
+    
+    let status = 'Waiting';
+    let message = '';
+    
+    if (patientAppointment.status === 'Done') {
+        status = 'Completed';
+        message = 'Your consultation is completed';
+    } else if (patientAppointment.status === 'Absent') {
+        status = 'Missed';
+        message = 'You missed your appointment';
+    } else if (patientAppointment.queueNumber <= queue.currentNumber) {
+        status = 'Called';
+        message = 'Your number has been called - please check with reception';
+    } else if (patientAppointment.queueNumber === queue.currentNumber + 1) {
+        status = 'Next';
+        message = 'You are next! Please be ready';
+    } else {
+        status = 'Waiting';
+        message = `${patientsAhead} patients ahead of you`;
+    }
+    
+    res.json({
+        hasAppointment: true,
+        queueNumber: patientAppointment.queueNumber,
+        currentNumber: queue.currentNumber,
+        totalPatients: queue.totalPatients,
+        patientsAhead: patientsAhead,
+        status: status,
+        message: message,
+        doctorName: patientAppointment.doctorName,
+        appointmentTime: patientAppointment.time,
+        appointmentStatus: patientAppointment.status,
+        estimatedWaitMinutes: patientsAhead * 15 // 15 minutes per patient
+    });
+});
+
+// Additional helper API for queue overview
+app.get("/api/queue-overview/:doctorId", (req, res) => {
+    const { doctorId } = req.params;
+    const { date } = req.query;
+    const targetDate = date || new Date().toISOString().slice(0, 10);
+    
+    const doctorAppointments = appointments.filter(app => 
+        app.doctorId == doctorId && app.date === targetDate
+    ).sort((a, b) => a.queueNumber - b.queueNumber);
+    
+    const queue = doctorQueueStatus[doctorId];
+    const currentNumber = (queue && queue.date === targetDate) ? queue.currentNumber : 0;
+    
+    const overview = doctorAppointments.map(app => ({
+        queueNumber: app.queueNumber,
+        patientName: app.patientName,
+        time: app.time,
+        status: app.status,
+        isCompleted: app.queueNumber <= currentNumber,
+        isCurrent: app.queueNumber === currentNumber + 1,
+        isNext: app.queueNumber === currentNumber + 2
+    }));
+    
+    res.json({
+        date: targetDate,
+        currentNumber: currentNumber,
+        totalPatients: doctorAppointments.length,
+        appointments: overview,
+        isQueueActive: currentNumber > 0 || doctorAppointments.length > 0
+    });
+});
 
 
 
