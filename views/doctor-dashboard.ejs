@@ -2,24 +2,66 @@
 
 <div class="dashboard-header">
     <h1>Welcome, <%= doctor.name %></h1>
-    <p>Here are your scheduled appointments for the day.</p>
+    <p>Here are your schedules and appointments across different clinics.</p>
 </div>
 
-<div class="card">
-    <h3>Your Schedule</h3>
-    <ul class="appointment-list">
-        <% if(appointments.length > 0) { %>
-            <% appointments.forEach(app => { %>
-                <li class="appointment-item">
-                    <strong>Patient: <%= app.patientName %></strong><br>
-                    Date: <%= app.date %><br>
-                    Time: <%= app.time %>
-                </li>
-            <% }) %>
-        <% } else { %>
-            <p>You have no appointments scheduled.</p>
-        <% } %>
-    </ul>
+<div class="dashboard-grid">
+    <div class="card">
+        <h3>Your Clinic Schedules</h3>
+        <ul class="appointment-list">
+            <% if(schedules.length > 0) { %>
+                <% schedules.forEach(schedule => { %>
+                    <li class="appointment-item">
+                        <strong><%= schedule.clinic.name %></strong><br>
+                        <small><%= schedule.clinic.address %></small><br>
+                        Time: <%= schedule.startTime %> - <%= schedule.endTime %><br>
+                        Days: <%= schedule.days.join(', ') %>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>No clinic schedules assigned.</p>
+            <% } %>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>Your Appointments</h3>
+        <ul class="appointment-list">
+            <% if(appointments.length > 0) { %>
+                <% 
+                // Group appointments by clinic
+                const appointmentsByClinic = {};
+                appointments.forEach(app => {
+                    const clinicName = app.clinic ? app.clinic.name : 'Unknown Clinic';
+                    if (!appointmentsByClinic[clinicName]) {
+                        appointmentsByClinic[clinicName] = [];
+                    }
+                    appointmentsByClinic[clinicName].push(app);
+                });
+                %>
+                
+                <% Object.keys(appointmentsByClinic).forEach(clinicName => { %>
+                    <li class="appointment-item" style="background-color: #f8f9fa; margin-bottom: 1rem;">
+                        <strong style="color: #007bff; font-size: 1.1em;"><%= clinicName %></strong>
+                        <ul style="margin-top: 0.5rem; list-style: none; padding-left: 0;">
+                            <% appointmentsByClinic[clinicName].forEach(app => { %>
+                                <li style="padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                                    <strong>Patient: <%= app.patientName %></strong><br>
+                                    Date: <%= app.date %> at <%= app.time %><br>
+                                    <% if(app.patient) { %>
+                                        Mobile: <%= app.patient.mobile %><br>
+                                        DOB: <%= app.patient.dob %>
+                                    <% } %>
+                                </li>
+                            <% }) %>
+                        </ul>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>You have no appointments scheduled.</p>
+            <% } %>
+        </ul>
+    </div>
 </div>
 
 <%- include('partials/footer.ejs') %>

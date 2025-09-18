@@ -2,42 +2,115 @@
 
 <div class="dashboard-header">
     <h1>Welcome, <%= receptionist.name %> (Receptionist)</h1>
-    <p>Manage all clinic appointments and view patient data.</p>
+    <p>Managing <%= clinic.name %> - <%= clinic.address %></p>
 </div>
 
 <div class="dashboard-grid">
     <div class="card">
-        <h3>All Clinic Appointments (<%= appointments.length %>)</h3>
+        <h3>Add New Doctor to <%= clinic.name %></h3>
+        <form action="/receptionist/add-doctor" method="POST">
+            <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
+            <div class="form-group">
+                <label for="name">Doctor's Full Name</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="specialty">Specialty</label>
+                <input type="text" id="specialty" name="specialty" placeholder="e.g., Cardiologist, General Medicine" required>
+            </div>
+            <div class="form-group">
+                <label for="username">Create Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Create Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="startTime">Start Time</label>
+                <input type="time" id="startTime" name="startTime" required>
+            </div>
+            <div class="form-group">
+                <label for="endTime">End Time</label>
+                <input type="time" id="endTime" name="endTime" required>
+            </div>
+            <div class="form-group">
+                <label for="days">Available Days</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px;">
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" name="days" value="Monday" style="margin-right: 5px;"> Monday
+                    </label>
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" name="days" value="Tuesday" style="margin-right: 5px;"> Tuesday
+                    </label>
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" name="days" value="Wednesday" style="margin-right: 5px;"> Wednesday
+                    </label>
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" name="days" value="Thursday" style="margin-right: 5px;"> Thursday
+                    </label>
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" name="days" value="Friday" style="margin-right: 5px;"> Friday
+                    </label>
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" name="days" value="Saturday" style="margin-right: 5px;"> Saturday
+                    </label>
+                </div>
+            </div>
+            <button type="submit" class="btn">Add Doctor</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3><%= clinic.name %> Appointments (<%= appointments.length %>)</h3>
         <ul class="appointment-list">
             <% if(appointments.length > 0) { %>
                 <% appointments.forEach(app => { %>
                     <li class="appointment-item">
-                        <strong>Patient: <%= app.patientName %></strong> with <strong>Dr. <%= app.doctorName %></strong><br>
-                        Date: <%= app.date %> at <%= app.time %>
+                        <strong>Patient: <%= app.patientName %></strong> with <strong><%= app.doctorName %></strong><br>
+                        Date: <%= app.date %> at <%= app.time %><br>
+                        Status: <span style="color: green;"><%= app.status %></span>
                     </li>
                 <% }) %>
             <% } else { %>
-                <p>There are no appointments scheduled.</p>
+                <p>No appointments scheduled for <%= clinic.name %>.</p>
             <% } %>
         </ul>
     </div>
+</div>
 
-    <div class="card">
-        <h3>All Registered Patients (<%= patients.length %>)</h3>
-        <ul class="appointment-list">
-             <% if(patients.length > 0) { %>
-                <% patients.forEach(p => { %>
-                    <li class="appointment-item">
-                        <strong><%= p.name %></strong><br>
-                        Mobile: <%= p.mobile %><br>
-                        Date of Birth: <%= p.dob %>
-                    </li>
-                <% }) %>
-            <% } else { %>
-                <p>No patients are registered.</p>
-            <% } %>
-        </ul>
-    </div>
+<div class="card" style="margin-top: 2rem;">
+    <h3>Doctors Available at <%= clinic.name %> (<%= doctors.length %>)</h3>
+    <ul class="appointment-list">
+        <% if(doctors.length > 0) { %>
+            <% doctors.forEach(doc => { %>
+                <li class="appointment-item">
+                    <strong><%= doc.name %></strong> (<%= doc.specialty %>)<br>
+                    <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
+                    <small>Days: <%= doc.schedule.days.join(', ') %></small>
+                </li>
+            <% }) %>
+        <% } else { %>
+            <p>No doctors assigned to <%= clinic.name %>.</p>
+        <% } %>
+    </ul>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3>All Registered Patients (<%= patients.length %>)</h3>
+    <ul class="appointment-list">
+        <% if(patients.length > 0) { %>
+            <% patients.forEach(p => { %>
+                <li class="appointment-item">
+                    <strong><%= p.name %></strong><br>
+                    Mobile: <%= p.mobile %><br>
+                    Date of Birth: <%= p.dob %>
+                </li>
+            <% }) %>
+        <% } else { %>
+            <p>No patients are registered.</p>
+        <% } %>
+    </ul>
 </div>
 
 <%- include('partials/footer.ejs') %>

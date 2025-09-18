@@ -2,7 +2,7 @@
 
 <div class="dashboard-header">
     <h1>Welcome, <%= patient.name %></h1>
-    <p>This is your patient dashboard. You can book and view your appointments here.</p>
+    <p>Book appointments at your preferred clinic with available doctors.</p>
 </div>
 
 <div class="dashboard-grid">
@@ -10,22 +10,34 @@
         <h3>Book a New Appointment</h3>
         <form action="/book-appointment" method="POST">
             <input type="hidden" name="patientId" value="<%= patient.id %>">
+            
             <div class="form-group">
-                <label for="doctorId">Select Doctor</label>
-                <select name="doctorId" id="doctorId" required>
-                    <% doctors.forEach(doc => { %>
-                        <option value="<%= doc.id %>"><%= doc.name %> (<%= doc.specialty %>)</option>
+                <label for="clinicId">Select Clinic</label>
+                <select name="clinicId" id="clinicId" onchange="loadDoctors()" required>
+                    <option value="">Choose a clinic...</option>
+                    <% clinics.forEach(clinic => { %>
+                        <option value="<%= clinic.id %>"><%= clinic.name %> - <%= clinic.address %></option>
                     <% }) %>
                 </select>
             </div>
+            
+            <div class="form-group">
+                <label for="doctorId">Select Doctor</label>
+                <select name="doctorId" id="doctorId" required disabled>
+                    <option value="">First select a clinic...</option>
+                </select>
+            </div>
+            
             <div class="form-group">
                 <label for="date">Select Date</label>
                 <input type="date" name="date" id="date" required>
             </div>
+            
             <div class="form-group">
                 <label for="time">Select Time</label>
                 <input type="time" name="time" id="time" required>
             </div>
+            
             <button type="submit" class="btn">Book Now</button>
         </form>
     </div>
@@ -36,7 +48,7 @@
             <% if(appointments.length > 0) { %>
                 <% appointments.forEach(app => { %>
                     <li class="appointment-item">
-                        <strong>Dr. <%= app.doctorName %></strong><br>
+                        <strong><%= app.doctorName %></strong> at <strong><%= app.clinicName %></strong><br>
                         Date: <%= app.date %><br>
                         Time: <%= app.time %><br>
                         Status: <span style="color: green;"><%= app.status %></span>
@@ -48,5 +60,46 @@
         </ul>
     </div>
 </div>
+
+<script>
+async function loadDoctors() {
+    const clinicId = document.getElementById('clinicId').value;
+    const doctorSelect = document.getElementById('doctorId');
+    
+    if (!clinicId) {
+        doctorSelect.innerHTML = '<option value="">First select a clinic...</option>';
+        doctorSelect.disabled = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/doctors-by-clinic/${clinicId}`);
+        const doctors = await response.json();
+        
+        doctorSelect.innerHTML = '';
+        
+        if (doctors.length === 0) {
+            doctorSelect.innerHTML = '<option value="">No doctors available at this clinic</option>';
+            doctorSelect.disabled = true;
+        } else {
+            doctorSelect.innerHTML = '<option value="">Choose a doctor...</option>';
+            doctors.forEach(doctor => {
+                const option = document.createElement('option');
+                option.value = doctor.id;
+                option.textContent = `${doctor.name} (${doctor.specialty}) - ${doctor.schedule.startTime}-${doctor.schedule.endTime}`;
+                doctorSelect.appendChild(option);
+            });
+            doctorSelect.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error loading doctors:', error);
+        doctorSelect.innerHTML = '<option value="">Error loading doctors</option>';
+        doctorSelect.disabled = true;
+    }
+}
+
+// Set minimum date to today
+document.getElementById('date').min = new Date().toISOString().split('T')[0];
+</script>
 
 <%- include('partials/footer.ejs') %>

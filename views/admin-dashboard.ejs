@@ -2,7 +2,7 @@
 
 <div class="dashboard-header">
     <h1>Welcome, <%= admin.name %> (Admin)</h1>
-    <p>Oversee all system data from the admin dashboard.</p>
+    <p>Oversee all system data across multiple clinics.</p>
 </div>
 
 <div class="dashboard-grid">
@@ -28,39 +28,43 @@
             </div>
             <button type="submit" class="btn">Add Doctor</button>
         </form>
+        <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+            <em>Note: Admin adds doctors without clinic assignment. Receptionists can assign schedules.</em>
+        </p>
     </div>
 
     <div class="card">
         <h3>All Appointments (<%= appointments.length %>)</h3>
         <ul class="appointment-list">
-             <% appointments.forEach(app => { %>
-                <li class="appointment-item"><%= app.patientName %> with Dr. <%= app.doctorName %> on <%= app.date %></li>
-            <% }) %>
+            <% if(appointments.length > 0) { %>
+                <% 
+                // Group appointments by clinic
+                const appointmentsByClinic = {};
+                appointments.forEach(app => {
+                    const clinicName = app.clinicName || 'Unknown Clinic';
+                    if (!appointmentsByClinic[clinicName]) {
+                        appointmentsByClinic[clinicName] = [];
+                    }
+                    appointmentsByClinic[clinicName].push(app);
+                });
+                %>
+                
+                <% Object.keys(appointmentsByClinic).forEach(clinicName => { %>
+                    <li class="appointment-item" style="background-color: #f8f9fa; margin-bottom: 1rem;">
+                        <strong style="color: #007bff; font-size: 1.1em;"><%= clinicName %></strong>
+                        <ul style="margin-top: 0.5rem; list-style: none; padding-left: 0;">
+                            <% appointmentsByClinic[clinicName].forEach(app => { %>
+                                <li style="padding: 0.3rem 0; border-bottom: 1px solid #eee;">
+                                    <%= app.patientName %> with <%= app.doctorName %> on <%= app.date %>
+                                </li>
+                            <% }) %>
+                        </ul>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>No appointments scheduled.</p>
+            <% } %>
         </ul>
     </div>
 </div>
 
-<div class="card" style="margin-top: 2rem;">
-    <h3>All Doctors (<%= doctors.length %>)</h3>
-    <ul class="appointment-list">
-        <% doctors.forEach(doc => { %>
-           <li class="appointment-item">
-                <strong><%= doc.name %></strong> (<%= doc.specialty %>) - ID: <%= doc.id %>
-           </li>
-       <% }) %>
-   </ul>
-</div>
-
-<div class="card" style="margin-top: 2rem;">
-     <h3>All Patients (<%= patients.length %>)</h3>
-     <ul class="appointment-list">
-         <% patients.forEach(p => { %>
-            <li class="appointment-item">
-                 <strong><%= p.name %></strong> (Mobile: <%= p.mobile %>) - ID: <%= p.id %>
-            </li>
-        <% }) %>
-    </ul>
-</div>
-
-
-<%- include('partials/footer.ejs') %>
