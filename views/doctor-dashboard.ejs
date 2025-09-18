@@ -1,73 +1,54 @@
 <%- include('partials/header.ejs') %>
 
 <div class="dashboard-header">
-    <h1>Welcome, <%= doctor.name %></h1>
-    <p>Here are your schedules and appointments across different clinics.</p>
+    <h1>Welcome, Dr. <%= doctor.name %></h1>
+    <p>Manage your appointments and schedule.</p>
 </div>
 
 <div class="dashboard-grid">
     <div class="card">
-        <h3>Your Clinic Schedules</h3>
-        <ul class="appointment-list">
-            <% if(schedules.length > 0) { %>
-                <% schedules.forEach(schedule => {
-                    // normalize into an array safely (works if days is array, string, or falsy)
-                    const daysArr = Array.isArray(schedule.days)
-                        ? schedule.days
-                        : (typeof schedule.days === 'string' && schedule.days.trim() !== '')
-                            ? schedule.days.split(',').map(d => d.trim())
-                            : [];
-                %>
-                    <li class="appointment-item">
-                        <strong><%= schedule.clinic ? schedule.clinic.name : 'Unknown Clinic' %></strong><br>
-                        <small><%= schedule.clinic ? schedule.clinic.address : '' %></small><br>
-                        Time: <%= schedule.startTime || 'N/A' %> - <%= schedule.endTime || 'N/A' %><br>
-                        Days: <%= daysArr.length ? daysArr.join(', ') : 'Not specified' %>
-                    </li>
-                <% }) %>
-            <% } else { %>
-                <p>No clinic schedules assigned.</p>
-            <% } %>
-        </ul>
+        <h3>Your Appointments</h3>
+        <% if(appointments.length > 0) { %>
+            <% appointments.forEach(app => { %>
+                <div class="appointment-item">
+                    <strong>Patient: <%= app.patientName %></strong> (Queue: <%= app.queueNumber %>)<br>
+                    Date: <%= app.date %> at <%= app.time %><br>
+                    Status: <%= app.status %><br>
+                    <form action="/doctor/update-appointment-status" method="POST" style="display: inline;">
+                        <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                        <input type="hidden" name="appointmentId" value="<%= app.id %>">
+                        <select name="status" onchange="this.form.submit()">
+                            <option value="Confirmed" <%= app.status === 'Confirmed' ? 'selected' : '' %>>Confirmed</option>
+                            <option value="Waiting" <%= app.status === 'Waiting' ? 'selected' : '' %>>Waiting</option>
+                            <option value="Done" <%= app.status === 'Done' ? 'selected' : '' %>>Done</option>
+                            <option value="Absent" <%= app.status === 'Absent' ? 'selected' : '' %>>Absent</option>
+                        </select>
+                    </form>
+                </div>
+            <% }) %>
+        <% } else { %>
+            <p>No appointments today.</p>
+        <% } %>
     </div>
 
     <div class="card">
-        <h3>Your Appointments</h3>
+        <h3>Your Schedule</h3>
         <ul class="appointment-list">
-            <% if(appointments.length > 0) { %>
-                <% 
-                // Group appointments by clinic
-                const appointmentsByClinic = {};
-                appointments.forEach(app => {
-                    const clinicName = app.clinic ? app.clinic.name : 'Unknown Clinic';
-                    if (!appointmentsByClinic[clinicName]) {
-                        appointmentsByClinic[clinicName] = [];
-                    }
-                    appointmentsByClinic[clinicName].push(app);
-                });
-                %>
-                
-                <% Object.keys(appointmentsByClinic).forEach(clinicName => { %>
-                    <li class="appointment-item" style="background-color: #f8f9fa; margin-bottom: 1rem;">
-                        <strong style="color: #007bff; font-size: 1.1em;"><%= clinicName %></strong>
-                        <ul style="margin-top: 0.5rem; list-style: none; padding-left: 0;">
-                            <% appointmentsByClinic[clinicName].forEach(app => { %>
-                                <li style="padding: 0.5rem 0; border-bottom: 1px solid #eee;">
-                                    <strong>Patient: <%= app.patientName %></strong><br>
-                                    Date: <%= app.date %> at <%= app.time %><br>
-                                    <% if(app.patient) { %>
-                                        <% if(app.patient.mobile) { %>Mobile: <%= app.patient.mobile %><br><% } %>
-                                        <% if(app.patient.dob) { %>DOB: <%= app.patient.dob %><% } %>
-                                    <% } %>
-                                </li>
-                            <% }) %>
-                        </ul>
-                    </li>
-                <% }) %>
-            <% } else { %>
-                <p>You have no appointments scheduled.</p>
-            <% } %>
+            <% schedules.forEach(schedule => { %>
+                <li class="appointment-item">
+                    <strong><%= schedule.clinic.name %></strong><br>
+                    <%= schedule.startTime %> - <%= schedule.endTime %><br>
+                    <small><%= schedule.days %></small>
+                </li>
+            <% }) %>
         </ul>
+        <hr>
+        <h4>Set Daily Patient Limit</h4>
+        <form action="/doctor/set-limit" method="POST">
+            <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+            <input type="number" name="dailyLimit" value="<%= doctor.dailyLimit %>" required>
+            <button type="submit" class="btn">Set Limit</button>
+        </form>
     </div>
 </div>
 

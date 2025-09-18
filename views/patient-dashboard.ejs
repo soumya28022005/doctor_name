@@ -2,56 +2,42 @@
 
 <div class="dashboard-header">
     <h1>Welcome, <%= patient.name %></h1>
-    <p>Book appointments at your preferred clinic with available doctors.</p>
+    <p>Find doctors and book your appointments.</p>
 </div>
 
 <div class="dashboard-grid">
+    <!-- Doctor Search -->
     <div class="card">
-        <h3>Book a New Appointment</h3>
-        <form action="/book-appointment" method="POST">
-            <input type="hidden" name="patientId" value="<%= patient.id %>">
-            
-            <div class="form-group">
-                <label for="clinicId">Select Clinic</label>
-                <select name="clinicId" id="clinicId" onchange="loadDoctors()" required>
-                    <option value="">Choose a clinic...</option>
-                    <% clinics.forEach(clinic => { %>
-                        <option value="<%= clinic.id %>"><%= clinic.name %> - <%= clinic.address %></option>
-                    <% }) %>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="doctorId">Select Doctor</label>
-                <select name="doctorId" id="doctorId" required disabled>
-                    <option value="">First select a clinic...</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="date">Select Date</label>
-                <input type="date" name="date" id="date" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="time">Select Time</label>
-                <input type="time" name="time" id="time" required>
-            </div>
-            
-            <button type="submit" class="btn">Book Now</button>
-        </form>
+        <h3>Find a Doctor</h3>
+        <div class="form-group">
+            <input type="text" id="doctorNameSearch" onkeyup="searchDoctors()" placeholder="Search by name...">
+        </div>
+        <div class="form-group">
+            <input type="text" id="specialtySearch" onkeyup="searchDoctors()" placeholder="Search by specialty (e.g., Dentist)...">
+        </div>
+        <div class="form-group">
+            <input type="text" id="clinicSearch" onkeyup="searchDoctors()" placeholder="Search by clinic name or place...">
+        </div>
+        <div class="form-group">
+            <label>Select Date to See Availability</label>
+            <input type="date" id="dateSearch" onchange="searchDoctors()">
+        </div>
+        <div id="doctorSearchResults" style="margin-top: 20px;"></div>
     </div>
 
+    <!-- Patient Appointments -->
     <div class="card">
         <h3>Your Appointments</h3>
         <ul class="appointment-list">
             <% if(appointments.length > 0) { %>
                 <% appointments.forEach(app => { %>
                     <li class="appointment-item">
-                        <strong><%= app.doctorName %></strong> at <strong><%= app.clinicName %></strong><br>
-                        Date: <%= app.date %><br>
-                        Time: <%= app.time %><br>
-                        Status: <span style="color: green;"><%= app.status %></span>
+                        <strong>Dr. <%= app.doctorName %></strong> 
+                        on <%= app.date %> at <%= app.time %><br>
+                        Your Queue #: <strong><%= app.queueNumber %></strong><br>
+                        <span class="queue-status" data-doctor-id="<%= app.doctorId %>">
+                            Loading status...
+                        </span>
                     </li>
                 <% }) %>
             <% } else { %>
@@ -62,44 +48,73 @@
 </div>
 
 <script>
-async function loadDoctors() {
-    const clinicId = document.getElementById('clinicId').value;
-    const doctorSelect = document.getElementById('doctorId');
-    
-    if (!clinicId) {
-        doctorSelect.innerHTML = '<option value="">First select a clinic...</option>';
-        doctorSelect.disabled = true;
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/doctors-by-clinic/${clinicId}`);
-        const doctors = await response.json();
-        
-        doctorSelect.innerHTML = '';
-        
-        if (doctors.length === 0) {
-            doctorSelect.innerHTML = '<option value="">No doctors available at this clinic</option>';
-            doctorSelect.disabled = true;
-        } else {
-            doctorSelect.innerHTML = '<option value="">Choose a doctor...</option>';
-            doctors.forEach(doctor => {
-                const option = document.createElement('option');
-                option.value = doctor.id;
-                option.textContent = `${doctor.name} (${doctor.specialty}) - ${doctor.schedule.startTime}-${doctor.schedule.endTime}`;
-                doctorSelect.appendChild(option);
-            });
-            doctorSelect.disabled = false;
-        }
-    } catch (error) {
-        console.error('Error loading doctors:', error);
-        doctorSelect.innerHTML = '<option value="">Error loading doctors</option>';
-        doctorSelect.disabled = true;
-    }
-}
+    // Set date input to today by default
+    document.getElementById('dateSearch').value = new Date().toISOString().slice(0, 10);
 
-// Set minimum date to today
-document.getElementById('date').min = new Date().toISOString().split('T')[0];
+    async function searchDoctors() {
+        const name = document.getElementById('doctorNameSearch').value;
+        const specialty = document.getElementById('specialtySearch').value;
+        const clinic = document.getElementById('clinicSearch').value;
+        const date = document.getElementById('dateSearch').value;
+        const resultsContainer = document.getElementById('doctorSearchResults');
+
+        if (!date) {
+            resultsContainer.innerHTML = '<p style="color:red;">Please select a date to see availability.</p>';
+            return;
+        }
+
+        let query = [`date=${date}`];
+        if (name) query.push(`name=${name}`);
+        if (specialty) query.push(`specialty=${specialty}`);
+        if (clinic) query.push(`clinic=${clinic}`);
+
+        const response = await fetch(`/api/doctors?${query.join('&')}`);
+        const doctors = await response.json();
+
+        resultsContainer.innerHTML = '';
+        if (doctors.length > 0) {
+            doctors.forEach(doctor => {
+                const doctorDiv = document.createElement('div');
+                doctorDiv.className = 'appointment-item';
+                doctorDiv.innerHTML = `<h4>${doctor.name} - ${doctor.specialty}</h4>`;
+                
+                doctor.schedules.forEach(schedule => {
+                    let bookingFormHTML = `<p><b>${schedule.clinic.name}</b> (${schedule.startTime} - ${schedule.endTime})</p>`;
+                    
+                    // No time select, only Book button
+                    bookingFormHTML += `
+                    <form action="/book-appointment" method="POST">
+                        <input type="hidden" name="patientId" value="<%= patient.id %>">
+                        <input type="hidden" name="doctorId" value="${doctor.id}">
+                        <input type="hidden" name="clinicId" value="${schedule.clinicId}">
+                        <input type="hidden" name="date" value="${date}">
+                        <button type="submit" class="btn">Book Appointment</button>
+                    </form>`;
+
+                    doctorDiv.innerHTML += bookingFormHTML;
+                });
+                resultsContainer.appendChild(doctorDiv);
+            });
+        } else {
+            resultsContainer.innerHTML = '<p>No doctors found with the specified criteria.</p>';
+        }
+    }
+
+    async function updateQueueStatus() {
+        const statusElements = document.querySelectorAll('.queue-status');
+        statusElements.forEach(async (el) => {
+            const doctorId = el.dataset.doctorId;
+            const response = await fetch(`/api/queue-status/${doctorId}`);
+            const data = await response.json();
+            el.innerHTML = `Live Status: <strong>Serving # ${data.currentNumber}</strong> (of ${data.totalPatients} total)`;
+        });
+    }
+
+    // Initial load and periodic update
+    document.addEventListener('DOMContentLoaded', () => {
+        updateQueueStatus();
+        setInterval(updateQueueStatus, 10000);
+    });
 </script>
 
 <%- include('partials/footer.ejs') %>

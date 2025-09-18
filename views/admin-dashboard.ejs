@@ -3,239 +3,122 @@
 <h1>Welcome, <%= admin.name %> (Admin)</h1>
 
 <div class="dashboard-grid">
-
-  <!-- Clinics Management -->
-  <div class="card">
-    <h3>Clinics (<%= clinics.length %>)</h3>
-    <ul>
-      <% clinics.forEach(c => { %>
-        <li>
-          🏥 <strong><%= c.name %></strong>  
-          (ID: <%= c.id %>)  
-          <br>📍 <%= c.address %> | 📞 <%= c.phone %>
-          <form action="/admin/delete-clinic" method="POST" style="display:inline;">
-            <input type="hidden" name="clinicId" value="<%= c.id %>">
+    <div class="card">
+        <h3>Clinics</h3>
+        <ul>
+            <% clinics.forEach(c => { %>
+                <li><%= c.name %> <form action="/admin/delete-clinic" method="POST" style="display:inline;"><input type="hidden" name="clinicId" value="<%= c.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit">Delete</button></form></li>
+            <% }) %>
+        </ul>
+        <form action="/admin/add-clinic" method="POST">
             <input type="hidden" name="adminId" value="<%= admin.id %>">
-            <button type="submit">🗑 Delete</button>
-          </form>
-        </li>
-      <% }) %>
-    </ul>
+            <input type="text" name="name" placeholder="Clinic Name" required>
+            <input type="text" name="address" placeholder="Address" required>
+            <input type="text" name="phone" placeholder="Phone" required>
+            <button type="submit">Add Clinic</button>
+        </form>
+    </div>
 
-    <h4>Add New Clinic</h4>
-    <form action="/admin/add-clinic" method="POST" class="form-block">
-      <input type="hidden" name="adminId" value="<%= admin.id %>">
-      <input type="text" name="name" placeholder="Clinic Name" required>
-      <input type="text" name="address" placeholder="Address" required>
-      <input type="text" name="phone" placeholder="Phone" required>
-      <button type="submit">➕ Add Clinic</button>
-    </form>
-  </div>
-
-  <!-- Doctors Management -->
-  <div class="card">
-    <h3>Doctors (<%= doctors.length %>)</h3>
-    <ul>
-      <% doctors.forEach(d => { %>
-        <li>
-          👨‍⚕️ <strong><%= d.name %></strong>  
-          (ID: <%= d.id %>, Specialty: <%= d.specialty %>)  
-          <br>👤 Username: <%= d.username %> | 🔑 Password: <%= d.password %>
-          <form action="/admin/delete-doctor" method="POST" style="display:inline;">
-            <input type="hidden" name="doctorId" value="<%= d.id %>">
+    <div class="card">
+        <h3>Doctors</h3>
+        <ul>
+            <% doctors.forEach(d => { %>
+                <li><%= d.name %> - <%= d.specialty %> <form action="/admin/delete-doctor" method="POST" style="display:inline;"><input type="hidden" name="doctorId" value="<%= d.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit">Delete</button></form></li>
+            <% }) %>
+        </ul>
+        <form action="/admin/add-doctor" method="POST">
             <input type="hidden" name="adminId" value="<%= admin.id %>">
-            <button type="submit">🗑 Delete</button>
-          </form>
-        </li>
-      <% }) %>
-    </ul>
+            <input type="text" name="name" placeholder="Doctor Name" required>
+            <input type="text" name="specialty" placeholder="Specialty" required>
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="number" name="dailyLimit" placeholder="Daily Patient Limit" required>
+            <div>
+                <label>Assign to Clinics:</label><br>
+                <% clinics.forEach(c => { %>
+                    <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %><br>
+                <% }) %>
+            </div>
+            <input type="text" name="customAddress" placeholder="Or, Private Practice Address">
+            <input type="time" name="startTime" required>
+            <input type="time" name="endTime" required>
+            <input type="text" name="days" placeholder="e.g., Monday, Wednesday" required>
+            <button type="submit">Add Doctor</button>
+        </form>
+    </div>
 
-    <!-- Keep existing Add Doctor Form -->
-    <h4>Add New Doctor</h4>
-    <form action="/admin/add-doctor" method="POST" class="form-block">
-      <input type="hidden" name="adminId" value="<%= admin.id %>">
-
-      <div class="form-group">
-        <label>Doctor's Full Name</label>
-        <input type="text" name="name" required>
-      </div>
-
-      <div class="form-group">
-        <label>Specialty</label>
-        <input type="text" name="specialty" required>
-      </div>
-
-      <div class="form-group">
-        <label>Create Username</label>
-        <input type="text" name="username" required>
-      </div>
-
-      <div class="form-group">
-        <label>Create Password</label>
-        <input type="password" name="password" required>
-      </div>
-
-      <div class="form-group">
-        <label>Assign Location:</label>
-        <select name="locationType" id="locationType" onchange="toggleLocationFields()" required>
-          <option value="">-- Select --</option>
-          <option value="clinic">Existing Clinic</option>
-          <option value="custom">Private Practice (Custom Address)</option>
-        </select>
-      </div>
-
-      <!-- Existing Clinic -->
-      <div id="clinicSelect" style="display:none;">
-        <label>Select Clinic:</label>
-        <select name="clinicId">
-          <% clinics.forEach(c => { %>
-            <option value="<%= c.id %>"><%= c.name %></option>
-          <% }) %>
-        </select>
-      </div>
-
-      <!-- Custom Address -->
-      <div id="customAddress" style="display:none;">
-        <label>Custom Address:</label>
-        <input type="text" name="customAddress" placeholder="Enter Address">
-      </div>
-
-      <div class="form-group">
-        <label>Start Time</label>
-        <input type="time" name="startTime" required>
-      </div>
-
-      <div class="form-group">
-        <label>End Time</label>
-        <input type="time" name="endTime" required>
-      </div>
-
-      <hr>
-      <p><strong>Select Weekly Schedule:</strong></p>
-
-      <div class="form-group">
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Sunday"> Sunday</label>
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Monday"> Monday</label>
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Tuesday"> Tuesday</label>
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Wednesday"> Wednesday</label>
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Thursday"> Thursday</label>
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Friday"> Friday</label>
-        <label><input type="checkbox" class="day-checkbox" name="days" value="Saturday"> Saturday</label>
-      </div>
-      <div>
-        <label style="font-weight: bold; color: #007bff;">
-          <input type="checkbox" id="select-all-days"> Every Day
-        </label>
-      </div>
-
-      <p style="text-align:center;font-weight:bold;margin:1rem 0;">OR</p>
-
-      <div class="form-group">
-        <label>Custom Schedule</label>
-        <input type="text" name="customSchedule" placeholder="e.g., 1st week of month">
-      </div>
-
-      <button type="submit" class="btn">➕ Add Doctor</button>
-    </form>
-  </div>
-
-  <!-- Patients Management -->
-  <div class="card">
-    <h3>Patients (<%= patients.length %>)</h3>
-    <ul>
-      <% patients.forEach(p => { %>
-        <li>
-          🧑 <strong><%= p.name %></strong>  
-          (ID: <%= p.id %>)  
-          <br>👤 Username: <%= p.username %> | 🔑 Password: <%= p.password %>  
-          📅 DOB: <%= p.dob %> | 📞 <%= p.mobile %>
-        </li>
-      <% }) %>
-    </ul>
-
-    <h4>Add New Patient</h4>
-    <form action="/receptionist/add-patient" method="POST" class="form-block">
-      <input type="hidden" name="receptionistId" value="1"> <!-- Or handle properly for admin later -->
-
-      <div class="form-group">
-        <label>Patient Name</label>
-        <input type="text" name="name" required>
-      </div>
-
-      <div class="form-group">
-        <label>Date of Birth</label>
-        <input type="date" name="dob" required>
-      </div>
-
-      <div class="form-group">
-        <label>Mobile</label>
-        <input type="text" name="mobile" required>
-      </div>
-
-      <div class="form-group">
-        <label>Username</label>
-        <input type="text" name="username" required>
-      </div>
-
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" name="password" required>
-      </div>
-
-      <button type="submit" class="btn">➕ Add Patient</button>
-    </form>
-  </div>
-
-    <!-- Appointments Management -->
-  <div class="card">
-    <h3>All Appointments (<%= appointments.length %>)</h3>
-    <% if (appointments.length === 0) { %>
-      <p>No appointments found.</p>
-    <% } else { %>
-      <table border="1" cellpadding="8" cellspacing="0" style="width:100%; text-align:left; border-collapse: collapse;">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Patient</th>
-            <th>Doctor</th>
-            <th>Clinic</th>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% appointments.forEach(a => { %>
-            <tr>
-              <td><%= a.id %></td>
-              <td><%= a.patientName %></td>
-              <td><%= a.doctorName %></td>
-              <td><%= a.clinicName %></td>
-              <td><%= a.date %></td>
-              <td><%= a.time %></td>
-              <td><%= a.status %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
-  </div>
-
-
+    <div class="card">
+        <h3>Patients</h3>
+        <ul>
+            <% patients.forEach(p => { %>
+                <li><%= p.name %> <form action="/admin/delete-patient" method="POST" style="display:inline;"><input type="hidden" name="patientId" value="<%= p.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit">Delete</button></form></li>
+            <% }) %>
+        </ul>
+        <form action="/admin/add-patient" method="POST">
+            <input type="hidden" name="adminId" value="<%= admin.id %>">
+            <input type="text" name="name" placeholder="Patient Name" required>
+            <input type="date" name="dob" required>
+            <input type="text" name="mobile" placeholder="Mobile" required>
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Add Patient</button>
+        </form>
+    </div>
+    
+    <div class="card">
+        <h3>Today's Appointments</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Patient</th>
+                    <th>Doctor</th>
+                    <th>Time</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% 
+                const today = new Date().toISOString().slice(0, 10);
+                const todaysAppointments = appointments.filter(a => a.date === today);
+                %>
+                <% if(todaysAppointments.length > 0) { %>
+                    <% todaysAppointments.forEach(a => { %>
+                        <tr>
+                            <td><%= a.patientName %></td>
+                            <td><%= a.doctorName %></td>
+                            <td><%= a.time %></td>
+                            <td><%= a.status %></td>
+                        </tr>
+                    <% }) %>
+                <% } else { %>
+                    <tr><td colspan="4">No appointments today.</td></tr>
+                <% } %>
+            </tbody>
+        </table>
+        
+        <h4>Add Appointment (Admin)</h4>
+        <form action="/admin/add-appointment" method="POST">
+             <input type="hidden" name="adminId" value="<%= admin.id %>">
+             <select name="patientId" required>
+                <% patients.forEach(p => { %>
+                    <option value="<%= p.id %>"><%= p.name %></option>
+                <% }) %>
+             </select>
+             <select name="doctorId" required>
+                <% doctors.forEach(d => { %>
+                    <option value="<%= d.id %>"><%= d.name %></option>
+                <% }) %>
+             </select>
+             <select name="clinicId" required>
+                <% clinics.forEach(c => { %>
+                    <option value="<%= c.id %>"><%= c.name %></option>
+                <% }) %>
+             </select>
+             <input type="date" name="date" required>
+             <input type="time" name="time" required>
+             <button type="submit">Add Appointment</button>
+        </form>
+    </div>
 </div>
 
-<script>
-function toggleLocationFields() {
-  const type = document.getElementById("locationType").value;
-  document.getElementById("clinicSelect").style.display = (type === "clinic") ? "block" : "none";
-  document.getElementById("customAddress").style.display = (type === "custom") ? "block" : "none";
-}
-
-document.getElementById('select-all-days').addEventListener('change', function(event) {
-  const isChecked = event.target.checked;
-  const dayCheckboxes = document.querySelectorAll('.day-checkbox');
-  dayCheckboxes.forEach(checkbox => {
-    checkbox.checked = isChecked;
-  });
-});
-</script>
+<%- include('partials/footer.ejs') %>
