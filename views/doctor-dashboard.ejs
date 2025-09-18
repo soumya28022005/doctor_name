@@ -1,0 +1,25 @@
+<%- include('partials/header.ejs') %>
+
+<div class="dashboard-header">
+    <h1>Welcome, <%= doctor.name %></h1>
+    <p>Here are your scheduled appointments for the day.</p>
+</div>
+
+<div class="card">
+    <h3>Your Schedule</h3>
+    <ul class="appointment-list">
+        <% if(appointments.length > 0) { %>
+            <% appointments.forEach(app => { %>
+                <li class="appointment-item">
+                    <strong>Patient: <%= app.patientName %></strong><br>
+                    Date: <%= app.date %><br>
+                    Time: <%= app.time %>
+                </li>
+            <% }) %>
+        <% } else { %>
+            <p>You have no appointments scheduled.</p>
+        <% } %>
+    </ul>
+</div>
+
+<%- include('partials/footer.ejs') %>

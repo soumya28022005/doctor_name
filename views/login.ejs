@@ -1,0 +1,28 @@
+<%- include('partials/header.ejs') %>
+
+<div class="form-container">
+    <h1>Login as <span><%= role %></span></h1>
+
+    <% if (error) { %>
+        <p class="error-message"><%= error %></p>
+    <% } %>
+
+    <form action="/login/<%= role %>" method="POST">
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit" class="btn">Login</button>
+    </form>
+    
+    <%# This link will only appear on the patient login page %>
+    <% if (role === 'patient') { %>
+        <p class="form-link">Don't have an account? <a href="/signup/<%= role %>">Sign Up</a></p>
+    <% } %>
+</div>
+
+<%- include('partials/footer.ejs') %>

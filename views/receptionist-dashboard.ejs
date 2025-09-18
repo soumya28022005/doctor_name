@@ -1,0 +1,43 @@
+<%- include('partials/header.ejs') %>
+
+<div class="dashboard-header">
+    <h1>Welcome, <%= receptionist.name %> (Receptionist)</h1>
+    <p>Manage all clinic appointments and view patient data.</p>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card">
+        <h3>All Clinic Appointments (<%= appointments.length %>)</h3>
+        <ul class="appointment-list">
+            <% if(appointments.length > 0) { %>
+                <% appointments.forEach(app => { %>
+                    <li class="appointment-item">
+                        <strong>Patient: <%= app.patientName %></strong> with <strong>Dr. <%= app.doctorName %></strong><br>
+                        Date: <%= app.date %> at <%= app.time %>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>There are no appointments scheduled.</p>
+            <% } %>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>All Registered Patients (<%= patients.length %>)</h3>
+        <ul class="appointment-list">
+             <% if(patients.length > 0) { %>
+                <% patients.forEach(p => { %>
+                    <li class="appointment-item">
+                        <strong><%= p.name %></strong><br>
+                        Mobile: <%= p.mobile %><br>
+                        Date of Birth: <%= p.dob %>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>No patients are registered.</p>
+            <% } %>
+        </ul>
+    </div>
+</div>
+
+<%- include('partials/footer.ejs') %>

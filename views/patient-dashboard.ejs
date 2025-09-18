@@ -1,0 +1,52 @@
+<%- include('partials/header.ejs') %>
+
+<div class="dashboard-header">
+    <h1>Welcome, <%= patient.name %></h1>
+    <p>This is your patient dashboard. You can book and view your appointments here.</p>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card">
+        <h3>Book a New Appointment</h3>
+        <form action="/book-appointment" method="POST">
+            <input type="hidden" name="patientId" value="<%= patient.id %>">
+            <div class="form-group">
+                <label for="doctorId">Select Doctor</label>
+                <select name="doctorId" id="doctorId" required>
+                    <% doctors.forEach(doc => { %>
+                        <option value="<%= doc.id %>"><%= doc.name %> (<%= doc.specialty %>)</option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="date">Select Date</label>
+                <input type="date" name="date" id="date" required>
+            </div>
+            <div class="form-group">
+                <label for="time">Select Time</label>
+                <input type="time" name="time" id="time" required>
+            </div>
+            <button type="submit" class="btn">Book Now</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Your Appointments</h3>
+        <ul class="appointment-list">
+            <% if(appointments.length > 0) { %>
+                <% appointments.forEach(app => { %>
+                    <li class="appointment-item">
+                        <strong>Dr. <%= app.doctorName %></strong><br>
+                        Date: <%= app.date %><br>
+                        Time: <%= app.time %><br>
+                        Status: <span style="color: green;"><%= app.status %></span>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>You have no appointments scheduled.</p>
+            <% } %>
+        </ul>
+    </div>
+</div>
+
+<%- include('partials/footer.ejs') %>
