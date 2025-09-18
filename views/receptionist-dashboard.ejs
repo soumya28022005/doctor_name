@@ -10,13 +10,14 @@
         <h3>Add New Doctor to <%= clinic.name %></h3>
         <form action="/receptionist/add-doctor" method="POST">
             <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
+            
             <div class="form-group">
                 <label for="name">Doctor's Full Name</label>
                 <input type="text" id="name" name="name" required>
             </div>
             <div class="form-group">
                 <label for="specialty">Specialty</label>
-                <input type="text" id="specialty" name="specialty" placeholder="e.g., Cardiologist, General Medicine" required>
+                <input type="text" id="specialty" name="specialty" required>
             </div>
             <div class="form-group">
                 <label for="username">Create Username</label>
@@ -34,83 +35,72 @@
                 <label for="endTime">End Time</label>
                 <input type="time" id="endTime" name="endTime" required>
             </div>
+            
+            <hr>
+            <p><strong>Select Weekly Schedule:</strong></p>
+            
             <div class="form-group">
-                <label for="days">Available Days</label>
-                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px;">
-                    <label style="display: flex; align-items: center; font-weight: normal;">
-                        <input type="checkbox" name="days" value="Monday" style="margin-right: 5px;"> Monday
-                    </label>
-                    <label style="display: flex; align-items: center; font-weight: normal;">
-                        <input type="checkbox" name="days" value="Tuesday" style="margin-right: 5px;"> Tuesday
-                    </label>
-                    <label style="display: flex; align-items: center; font-weight: normal;">
-                        <input type="checkbox" name="days" value="Wednesday" style="margin-right: 5px;"> Wednesday
-                    </label>
-                    <label style="display: flex; align-items: center; font-weight: normal;">
-                        <input type="checkbox" name="days" value="Thursday" style="margin-right: 5px;"> Thursday
-                    </label>
-                    <label style="display: flex; align-items: center; font-weight: normal;">
-                        <input type="checkbox" name="days" value="Friday" style="margin-right: 5px;"> Friday
-                    </label>
-                    <label style="display: flex; align-items: center; font-weight: normal;">
-                        <input type="checkbox" name="days" value="Saturday" style="margin-right: 5px;"> Saturday
+                <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 5px;">
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Sunday"> Sunday</label>
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Monday"> Monday</label>
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Tuesday"> Tuesday</label>
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Wednesday"> Wednesday</label>
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Thursday"> Thursday</label>
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Friday"> Friday</label>
+                    <label><input type="checkbox" class="day-checkbox" name="days" value="Saturday"> Saturday</label>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label style="font-weight: bold; color: #007bff;">
+                        <input type="checkbox" id="select-all-days"> Every Day
                     </label>
                 </div>
+            </div>
+
+            <p style="text-align: center; font-weight: bold; margin: 1rem 0;">OR</p>
+
+            <div class="form-group">
+                <label for="customSchedule"><strong>Enter Custom Schedule Rule:</strong></label>
+                <input type="text" id="customSchedule" name="customSchedule" class="form-control" placeholder="e.g., 1st week of month">
             </div>
             <button type="submit" class="btn">Add Doctor</button>
         </form>
     </div>
 
-    <div class="card">
-        <h3><%= clinic.name %> Appointments (<%= appointments.length %>)</h3>
-        <ul class="appointment-list">
-            <% if(appointments.length > 0) { %>
-                <% appointments.forEach(app => { %>
-                    <li class="appointment-item">
-                        <strong>Patient: <%= app.patientName %></strong> with <strong><%= app.doctorName %></strong><br>
-                        Date: <%= app.date %> at <%= app.time %><br>
-                        Status: <span style="color: green;"><%= app.status %></span>
-                    </li>
-                <% }) %>
-            <% } else { %>
-                <p>No appointments scheduled for <%= clinic.name %>.</p>
-            <% } %>
-        </ul>
-    </div>
-</div>
+   
 
-<div class="card" style="margin-top: 2rem;">
+<div class="card" >
     <h3>Doctors Available at <%= clinic.name %> (<%= doctors.length %>)</h3>
     <ul class="appointment-list">
-        <% if(doctors.length > 0) { %>
-            <% doctors.forEach(doc => { %>
-                <li class="appointment-item">
-                    <strong><%= doc.name %></strong> (<%= doc.specialty %>)<br>
-                    <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
-                    <small>Days: <%= doc.schedule.days.join(', ') %></small>
-                </li>
-            <% }) %>
-        <% } else { %>
-            <p>No doctors assigned to <%= clinic.name %>.</p>
-        <% } %>
-    </ul>
+    <% if(doctors.length > 0) { %>
+        <% doctors.forEach(doc => { %>
+            <li class="appointment-item">
+                <a href="/receptionist/doctor-appointments/<%= doc.id %>">
+                    <strong><%= doc.name %></strong>
+                </a> 
+                (<%= doc.specialty %>)<br>
+                <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
+                <small>Days: <%= doc.schedule.days %></small> 
+            </li>
+        <% }) %>
+    <% } else { %>
+        <p>No doctors assigned to <%= clinic.name %>.</p>
+    <% } %>
+</ul>
+
 </div>
 
-<div class="card" style="margin-top: 2rem;">
-    <h3>All Registered Patients (<%= patients.length %>)</h3>
-    <ul class="appointment-list">
-        <% if(patients.length > 0) { %>
-            <% patients.forEach(p => { %>
-                <li class="appointment-item">
-                    <strong><%= p.name %></strong><br>
-                    Mobile: <%= p.mobile %><br>
-                    Date of Birth: <%= p.dob %>
-                </li>
-            <% }) %>
-        <% } else { %>
-            <p>No patients are registered.</p>
-        <% } %>
-    </ul>
-</div>
+
+
+
+
+<script>
+    document.getElementById('select-all-days').addEventListener('change', function(event) {
+        const isChecked = event.target.checked;
+        const dayCheckboxes = document.querySelectorAll('.day-checkbox');
+        dayCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+    });
+</script>
 
 <%- include('partials/footer.ejs') %>
