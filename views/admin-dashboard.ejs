@@ -137,41 +137,6 @@
         </form>
     </div>
     
-    <div class="card">
-        <h3>Receptionists</h3>
-        <input type="text" id="receptionistSearch" onkeyup="filterList('receptionistSearch', 'receptionistList')" placeholder="Search for receptionists.." class="form-block" style="width: 100%; margin-bottom: 1rem;">
-        <ul id="receptionistList" class="appointment-list" style="max-height: 300px; overflow-y: auto;">
-            <% receptionists.forEach(r => { %>
-                <% const clinic = clinics.find(c => c.id === r.clinicId) || { name: 'N/A' }; %>
-                <li class="appointment-item">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <strong><%= r.name %></strong> - (Clinic: <%= clinic.name %>)<br>
-                            <small>User: <%= r.username %> | Pass: <%= r.password %></small>
-                        </div>
-                        <form action="/admin/delete-receptionist" method="POST" style="display:inline;">
-                            <input type="hidden" name="receptionistId" value="<%= r.id %>">
-                            <input type="hidden" name="adminId" value="<%= admin.id %>">
-                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                        </form>
-                    </div>
-                </li>
-            <% }) %>
-        </ul>
-        <h4 style="margin-top: 2rem;">Add New Receptionist</h4>
-        <form action="/admin/add-receptionist" method="POST" class="form-block">
-            <input type="hidden" name="adminId" value="<%= admin.id %>">
-            <input type="text" name="name" placeholder="Receptionist Name" required>
-            <select name="clinicId" required>
-                 <% clinics.forEach(c => { %>
-                    <option value="<%= c.id %>"><%= c.name %></option>
-                <% }) %>
-            </select>
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit" class="btn">Add Receptionist</button>
-        </form>
-    </div>
 
     <div class="card">
         <h3>Today's Appointments</h3>
