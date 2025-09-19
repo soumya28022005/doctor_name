@@ -68,30 +68,38 @@
 
    
 
-<div class="card" >
-    <h3>Doctors Available at <%= clinic.name %> (<%= doctors.length %>)</h3>
-    <ul class="appointment-list">
-    <% if(doctors.length > 0) { %>
-        <% doctors.forEach(doc => { %>
-            <li class="appointment-item">
-                <a href="/receptionist/doctor-appointments/<%= doc.id %>">
-                    <strong><%= doc.name %></strong>
-                </a> 
-                (<%= doc.specialty %>)<br>
-                <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
-                <small>Days: <%= doc.schedule.days %></small> 
-            </li>
-        <% }) %>
-    <% } else { %>
-        <p>No doctors assigned to <%= clinic.name %>.</p>
-    <% } %>
-</ul>
+    <div class="card">
+        <h3>Doctors Available at <%= clinic.name %> (<%= doctors.length %>)</h3>
+        <ul class="appointment-list">
+            <% if(doctors.length > 0) { %>
+                <% doctors.forEach(doc => { %>
+                    <li class="appointment-item">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <!-- Doctor Info -->
+                            <div style="flex-grow: 1;">
+                                <a href="/receptionist/doctor-appointments/<%= doc.id %>" style="text-decoration: none; color: inherit;">
+                                    <strong><%= doc.name %></strong>
+                                </a> 
+                                (<%= doc.specialty %>)<br>
+                                <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
+                                <small>Days: <%= doc.schedule.days %></small> 
+                            </div>
+                            <!-- Delete Form -->
+                            <form action="/receptionist/delete-doctor" method="POST" onsubmit="return confirm('Apni ki nishchit je ei doctor-ke delete korte chan? Ei kaaj-ti ferano jabe na.');">
+                                <input type="hidden" name="doctorId" value="<%= doc.id %>">
+                                <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
+                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                            </form>
+                        </div>
+                    </li>
+                <% }) %>
+            <% } else { %>
+                <p>No doctors assigned to <%= clinic.name %>.</p>
+            <% } %>
+        </ul>
+    </div>
 
 </div>
-
-
-
-
 
 <script>
     document.getElementById('select-all-days').addEventListener('change', function(event) {

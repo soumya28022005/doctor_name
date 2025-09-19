@@ -378,6 +378,18 @@ app.post("/receptionist/add-doctor", (req, res) => {
     res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
 });
 
+app.post("/receptionist/delete-doctor", (req, res) => {
+    const { doctorId, receptionistId } = req.body;
+    
+    // Remove the doctor from the main list
+    doctors = doctors.filter(d => d.id != doctorId);
+    
+    // Remove any schedules associated with this doctor
+    doctorSchedules = doctorSchedules.filter(s => s.doctorId != doctorId);
+    
+    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+});
+
 
 // --- Admin Actions ---
 app.post("/admin/add-doctor", (req, res) => {
@@ -563,10 +575,10 @@ app.get("/receptionist/doctor-appointments/:doctorId", (req, res) => {
 });
 
 app.post("/receptionist/add-appointment", (req, res) => {
-    const { doctorId, clinicId, patientName, date, time } = req.body;
+    const { doctorId, clinicId, patientName, patientAge } = req.body;
 
-    if (!doctorId || !clinicId || !patientName || !date || !time) {
-        return res.status(400).send("All fields are required");
+    if (!doctorId || !clinicId || !patientName || !patientAge) {
+        return res.status(400).send("Patient name and age are required.");
     }
 
     // Find doctor, clinic
@@ -574,6 +586,8 @@ app.post("/receptionist/add-appointment", (req, res) => {
     const clinic = clinics.find(c => c.id == clinicId);
 
     if (!doctor || !clinic) return res.status(404).send("Doctor or clinic not found");
+
+    const date = new Date().toISOString().slice(0, 10);
 
     // --- Daily Limit Check ---
     const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
@@ -588,17 +602,28 @@ app.post("/receptionist/add-appointment", (req, res) => {
         `);
     }
 
+    const queueNumber = getNextQueueNumber(doctorId, date);
+
+    // Calculate approx time
+    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
+    let approxTime = schedule ? schedule.startTime : '00:00'; // default
+    if (doctor.consultationDuration && schedule) {
+        const start = new Date(`${date}T${schedule.startTime}`);
+        start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
+        approxTime = start.toTimeString().slice(0,5);
+    }
+
     // Add appointment
     const newAppointment = {
         id: ++last_appointment_id,
         patientId: null, // receptionist may add a patient manually later
-        patientName,
+        patientName: `${patientName} (Age: ${patientAge})`,
         doctorId: parseInt(doctorId),
         doctorName: doctor.name,
         clinicId: parseInt(clinicId),
         clinicName: clinic.name,
         date,
-        time,
+        time: approxTime,
         status: "Confirmed",
         queueNumber: getNextQueueNumber(doctorId, date)
     };
