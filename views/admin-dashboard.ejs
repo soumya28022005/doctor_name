@@ -5,9 +5,27 @@
 <div class="dashboard-grid">
     <div class="card">
         <h3>Clinics</h3>
-        <ul>
+        <input type="text" id="clinicSearch" onkeyup="filterList('clinicSearch', 'clinicList')" placeholder="Search for clinics.." class="form-block" style="width: 100%; margin-bottom: 1rem;">
+        <ul id="clinicList" class="appointment-list" style="max-height: 300px; overflow-y: auto;">
             <% clinics.forEach(c => { %>
-                <li><%= c.name %> (<%= c.address %>) <form action="/admin/delete-clinic" method="POST" style="display:inline;"><input type="hidden" name="clinicId" value="<%= c.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit" class="btn btn-danger btn-small">Delete</button></form></li>
+                <li class="appointment-item">
+                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <strong><%= c.name %></strong> - <%= c.address %><br>
+                            <% const receptionist = receptionists.find(r => r.clinicId === c.id); %>
+                            <% if (receptionist) { %>
+                                <small>Receptionist: <%= receptionist.name %> | User: <%= receptionist.username %> | Pass: <%= receptionist.password %></small>
+                            <% } else { %>
+                                <small style="color: #ef4444;">No receptionist assigned.</small>
+                            <% } %>
+                        </div>
+                        <form action="/admin/delete-clinic" method="POST" style="display:inline;">
+                            <input type="hidden" name="clinicId" value="<%= c.id %>">
+                            <input type="hidden" name="adminId" value="<%= admin.id %>">
+                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                        </form>
+                    </div>
+                </li>
             <% }) %>
         </ul>
         <h4 style="margin-top: 2rem;">Add New Clinic</h4>
@@ -16,15 +34,33 @@
             <input type="text" name="name" placeholder="Clinic Name" required>
             <input type="text" name="address" placeholder="Address" required>
             <input type="text" name="phone" placeholder="Phone" required>
-            <button type="submit" class="btn">Add Clinic</button>
+            <hr style="margin: 1rem 0;">
+            <label><strong>Create Receptionist Account for this Clinic:</strong></label>
+            <input type="text" name="receptionistName" placeholder="Receptionist's Full Name" required>
+            <input type="text" name="username" placeholder="Receptionist's Username" required>
+            <input type="password" name="password" placeholder="Create Password" required>
+            <button type="submit" class="btn" style="margin-top: 1rem;">Add Clinic & Receptionist</button>
         </form>
     </div>
 
     <div class="card">
         <h3>Doctors</h3>
-        <ul>
+        <input type="text" id="doctorSearch" onkeyup="filterList('doctorSearch', 'doctorList')" placeholder="Search for doctors.." class="form-block" style="width: 100%; margin-bottom: 1rem;">
+        <ul id="doctorList" class="appointment-list" style="max-height: 300px; overflow-y: auto;">
             <% doctors.forEach(d => { %>
-                <li><%= d.name %> - <%= d.specialty %> <form action="/admin/delete-doctor" method="POST" style="display:inline;"><input type="hidden" name="doctorId" value="<%= d.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit" class="btn btn-danger btn-small">Delete</button></form></li>
+                <li class="appointment-item">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <strong><%= d.name %></strong> - <%= d.specialty %><br>
+                            <small>User: <%= d.username %> | Pass: <%= d.password %></small>
+                        </div>
+                        <form action="/admin/delete-doctor" method="POST" style="display:inline;">
+                            <input type="hidden" name="doctorId" value="<%= d.id %>">
+                            <input type="hidden" name="adminId" value="<%= admin.id %>">
+                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                        </form>
+                    </div>
+                </li>
             <% }) %>
         </ul>
         <h4 style="margin-top: 2rem;">Add New Doctor</h4>
@@ -35,39 +71,58 @@
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
             <input type="number" name="dailyLimit" placeholder="Daily Patient Limit" required>
-            
+
             <div style="margin-top: 1rem;">
                 <label><strong>Assign to Existing Clinics:</strong></label><br>
                 <% clinics.forEach(c => { %>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: normal;">
-                        <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %>
-                    </label>
+                    <div class="form-block">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: normal;">
+                            <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %>
+                        </label>
+                        <label>Start Time</label>
+                        <input type="time" name="startTime_<%= c.id %>" >
+                        <label>End Time</label>
+                        <input type="time" name="endTime_<%= c.id %>" >
+                        <input type="text" name="days_<%= c.id %>" placeholder="e.g., Monday, Wednesday">
+                    </div>
                 <% }) %>
             </div>
 
             <div style="margin-top: 1rem;" id="private-clinics-container">
                 <label><strong>Or, Add Private Practice Locations:</strong></label>
-                <div class="clinic-entry" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                    <input type="text" name="customAddress" placeholder="Private Practice Address" style="flex-grow: 1;">
+                <div class="clinic-entry form-block" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; align-items: stretch;">
+                    <input type="text" name="customAddress" placeholder="Private Practice Address" style="flex-grow: 1; width: 100%;">
+                    <label>Start Time</label>
+                    <input type="time" name="customStartTime" >
+                    <label>End Time</label>
+                    <input type="time" name="customEndTime" >
+                    <input type="text" name="customDays" placeholder="e.g., Monday, Wednesday" style="width: 100%;">
                 </div>
             </div>
             <button type="button" id="add-clinic-btn" class="btn btn-secondary btn-small" style="margin-bottom: 1rem;">+ Add Another Clinic</button>
-            
-            <hr style="margin: 1rem 0;">
 
-            <label><strong>Set Schedule for ALL Assigned Clinics:</strong></label>
-            <input type="time" name="startTime" required>
-            <input type="time" name="endTime" required>
-            <input type="text" name="days" placeholder="e.g., Monday, Wednesday" required>
             <button type="submit" class="btn" style="margin-top: 1rem; width: 100%;">Add Doctor</button>
         </form>
     </div>
 
     <div class="card">
         <h3>Patients</h3>
-        <ul>
+        <input type="text" id="patientSearch" onkeyup="filterList('patientSearch', 'patientList')" placeholder="Search for patients.." class="form-block" style="width: 100%; margin-bottom: 1rem;">
+        <ul id="patientList" class="appointment-list" style="max-height: 300px; overflow-y: auto;">
             <% patients.forEach(p => { %>
-                <li><%= p.name %> <form action="/admin/delete-patient" method="POST" style="display:inline;"><input type="hidden" name="patientId" value="<%= p.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit" class="btn btn-danger btn-small">Delete</button></form></li>
+                <li class="appointment-item">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <strong><%= p.name %></strong><br>
+                            <small>User: <%= p.username %> | Pass: <%= p.password %></small>
+                        </div>
+                        <form action="/admin/delete-patient" method="POST" style="display:inline;">
+                            <input type="hidden" name="patientId" value="<%= p.id %>">
+                            <input type="hidden" name="adminId" value="<%= admin.id %>">
+                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                        </form>
+                    </div>
+                </li>
             <% }) %>
         </ul>
         <h4 style="margin-top: 2rem;">Add New Patient</h4>
@@ -82,6 +137,42 @@
         </form>
     </div>
     
+    <div class="card">
+        <h3>Receptionists</h3>
+        <input type="text" id="receptionistSearch" onkeyup="filterList('receptionistSearch', 'receptionistList')" placeholder="Search for receptionists.." class="form-block" style="width: 100%; margin-bottom: 1rem;">
+        <ul id="receptionistList" class="appointment-list" style="max-height: 300px; overflow-y: auto;">
+            <% receptionists.forEach(r => { %>
+                <% const clinic = clinics.find(c => c.id === r.clinicId) || { name: 'N/A' }; %>
+                <li class="appointment-item">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <strong><%= r.name %></strong> - (Clinic: <%= clinic.name %>)<br>
+                            <small>User: <%= r.username %> | Pass: <%= r.password %></small>
+                        </div>
+                        <form action="/admin/delete-receptionist" method="POST" style="display:inline;">
+                            <input type="hidden" name="receptionistId" value="<%= r.id %>">
+                            <input type="hidden" name="adminId" value="<%= admin.id %>">
+                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                        </form>
+                    </div>
+                </li>
+            <% }) %>
+        </ul>
+        <h4 style="margin-top: 2rem;">Add New Receptionist</h4>
+        <form action="/admin/add-receptionist" method="POST" class="form-block">
+            <input type="hidden" name="adminId" value="<%= admin.id %>">
+            <input type="text" name="name" placeholder="Receptionist Name" required>
+            <select name="clinicId" required>
+                 <% clinics.forEach(c => { %>
+                    <option value="<%= c.id %>"><%= c.name %></option>
+                <% }) %>
+            </select>
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit" class="btn">Add Receptionist</button>
+        </form>
+    </div>
+
     <div class="card">
         <h3>Today's Appointments</h3>
         <table>
@@ -145,14 +236,20 @@ document.addEventListener('DOMContentLoaded', () => {
         addClinicBtn.addEventListener('click', function() {
             const container = document.getElementById('private-clinics-container');
             const newEntry = document.createElement('div');
-            newEntry.className = 'clinic-entry';
+            newEntry.className = 'clinic-entry form-block';
             newEntry.style.display = 'flex';
+            newEntry.style.flexDirection = 'column';
             newEntry.style.gap = '10px';
             newEntry.style.marginBottom = '10px';
-            newEntry.style.alignItems = 'center';
+            newEntry.style.alignItems = 'stretch';
             
             newEntry.innerHTML = `
-                <input type="text" name="customAddress" placeholder="Another Private Practice Address" style="flex-grow: 1;">
+                <input type="text" name="customAddress" placeholder="Another Private Practice Address" style="flex-grow: 1; width: 100%;">
+                <label>Start Time</label>
+                <input type="time" name="customStartTime" >
+                <label>End Time</label>
+                <input type="time" name="customEndTime" >
+                <input type="text" name="customDays" placeholder="e.g., Monday, Wednesday" style="width: 100%;">
                 <button type="button" class="btn btn-danger btn-small remove-clinic-btn">Remove</button>
             `;
             container.appendChild(newEntry);
@@ -163,6 +260,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function filterList(inputId, listId) {
+    const input = document.getElementById(inputId);
+    const filter = input.value.toLowerCase();
+    const ul = document.getElementById(listId);
+    const li = ul.getElementsByTagName('li');
+
+    for (let i = 0; i < li.length; i++) {
+        const txtValue = li[i].textContent || li[i].innerText;
+        if (txtValue.toLowerCase().indexOf(filter) > -1) {
+            li[i].style.display = "";
+        } else {
+            li[i].style.display = "none";
+        }
+    }
+}
 </script>
 
 <%- include('partials/footer.ejs') %>
+

@@ -238,7 +238,7 @@ app.get("/dashboard/admin", (req, res) => {
     const { userId } = req.query;
     const admin = admins.find(a => a.id == userId);
     if (!admin) return res.redirect('/login/admin');
-    res.render("admin-dashboard.ejs", { admin, patients, doctors, clinics, appointments });
+    res.render("admin-dashboard.ejs", { admin, patients, doctors, clinics, appointments, receptionists });
 });
 
 // --- Appointment Booking ---
@@ -393,27 +393,37 @@ app.post("/receptionist/delete-doctor", (req, res) => {
 
 // --- Admin Actions ---
 app.post("/admin/add-doctor", (req, res) => {
-    const { name, specialty, username, password, clinicIds, customAddress, startTime, endTime, days, dailyLimit, adminId } = req.body;
+    const { name, specialty, username, password, dailyLimit, adminId, clinicIds, customAddress, customStartTime, customEndTime, customDays } = req.body;
     const newDoctor = { id: ++last_doctors_id, name, specialty, username, password, dailyLimit: parseInt(dailyLimit) || 20 };
     doctors.push(newDoctor);
 
     if (clinicIds) {
         const selectedClinicIds = Array.isArray(clinicIds) ? clinicIds : [clinicIds];
         selectedClinicIds.forEach(clinicId => {
-            doctorSchedules.push({
-                id: ++last_schedule_id,
-                doctorId: newDoctor.id,
-                clinicId: parseInt(clinicId),
-                startTime, endTime,
-                days: Array.isArray(days) ? days.join(', ') : days
-            });
+            const startTime = req.body[`startTime_${clinicId}`];
+            const endTime = req.body[`endTime_${clinicId}`];
+            const days = req.body[`days_${clinicId}`];
+
+            if (startTime && endTime && days) {
+                doctorSchedules.push({
+                    id: ++last_schedule_id,
+                    doctorId: newDoctor.id,
+                    clinicId: parseInt(clinicId),
+                    startTime, endTime,
+                    days
+                });
+            }
         });
     }
 
     // Handle single or multiple custom addresses
     if (customAddress) {
         const addresses = Array.isArray(customAddress) ? customAddress : [customAddress];
-        addresses.forEach(address => {
+        const startTimes = Array.isArray(customStartTime) ? customStartTime : [customStartTime];
+        const endTimes = Array.isArray(customEndTime) ? customEndTime : [customEndTime];
+        const daysArray = Array.isArray(customDays) ? customDays : [customDays];
+
+        addresses.forEach((address, index) => {
             if (address.trim() !== '') { // Ensure we don't create clinics for empty strings
                 const newClinic = { 
                     id: ++last_clinic_id, 
@@ -426,8 +436,9 @@ app.post("/admin/add-doctor", (req, res) => {
                     id: ++last_schedule_id,
                     doctorId: newDoctor.id,
                     clinicId: newClinic.id,
-                    startTime, endTime,
-                    days: Array.isArray(days) ? days.join(', ') : days
+                    startTime: startTimes[index],
+                    endTime: endTimes[index],
+                    days: daysArray[index]
                 });
             }
         });
@@ -438,14 +449,28 @@ app.post("/admin/add-doctor", (req, res) => {
 
 
 app.post("/admin/add-clinic", (req, res) => {
-    const { name, address, phone, adminId } = req.body;
-    clinics.push({ id: ++last_clinic_id, name, address, phone });
+    const { name, address, phone, receptionistName, username, password, adminId } = req.body;
+    const newClinic = { id: ++last_clinic_id, name, address, phone };
+    clinics.push(newClinic);
+
+    if (receptionistName && username && password) {
+        const newReceptionist = {
+            id: ++last_receptionists_id,
+            name: receptionistName,
+            clinicId: newClinic.id,
+            username,
+            password
+        };
+        receptionists.push(newReceptionist);
+    }
+    
     res.redirect(`/dashboard/admin?userId=${adminId}`);
 });
 
 app.post("/admin/delete-clinic", (req, res) => {
     const { clinicId, adminId } = req.body;
     clinics = clinics.filter(c => c.id != clinicId);
+    receptionists = receptionists.filter(r => r.clinicId != clinicId); // Also delete associated receptionist
     res.redirect(`/dashboard/admin?userId=${adminId}`);
 });
 
@@ -464,6 +489,24 @@ app.post("/admin/add-patient", (req, res) => {
 app.post("/admin/delete-patient", (req, res) => {
     const { patientId, adminId } = req.body;
     patients = patients.filter(p => p.id != patientId);
+    res.redirect(`/dashboard/admin?userId=${adminId}`);
+});
+
+app.post("/admin/add-receptionist", (req, res) => {
+    const { name, clinicId, username, password, adminId } = req.body;
+    receptionists.push({
+        id: ++last_receptionists_id,
+        name,
+        clinicId: parseInt(clinicId),
+        username,
+        password
+    });
+    res.redirect(`/dashboard/admin?userId=${adminId}`);
+});
+
+app.post("/admin/delete-receptionist", (req, res) => {
+    const { receptionistId, adminId } = req.body;
+    receptionists = receptionists.filter(r => r.id != receptionistId);
     res.redirect(`/dashboard/admin?userId=${adminId}`);
 });
 
@@ -880,3 +923,4 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
+
