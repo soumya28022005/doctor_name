@@ -169,36 +169,35 @@ app.get("/dashboard/doctor", (req, res) => {
 
     const today = new Date().toISOString().slice(0, 10);
 
-    // Get all appointments for the day, this is the master list
     const allTodayAppointments = appointments
         .filter(app => app.doctorId == userId && app.date === today)
         .sort((a, b) => a.queueNumber - b.queueNumber);
 
-    // Determine the list of appointments to actually display on the page
+    // This is the list that will be displayed and used for all calculations on the page.
     const appointmentsToConsider = clinicId
         ? allTodayAppointments.filter(app => app.clinicId == clinicId)
         : allTodayAppointments;
 
-    // --- Calculations for the specific view (All or one clinic) ---
+    // --- All calculations are now based *only* on the list being viewed ---
     const doneAppointmentsInView = appointmentsToConsider.filter(app => app.status === 'Done');
     const isClinicQueueCompleted = doneAppointmentsInView.length >= appointmentsToConsider.length;
-    const display = { // For the main counter and progress bar
-        current: doneAppointmentsInView.length,
-        total: appointmentsToConsider.length
-    };
 
-    // --- Overall Day's Progress (for styling the list) ---
-    const overallDone = allTodayAppointments.filter(app => app.status === 'Done');
-    const queue = { // Used only for styling which items are 'Done'
-        currentNumber: overallDone.length > 0 ? Math.max(...overallDone.map(a => a.queueNumber)) : 0
-    };
-
-    // Find the next patients to show in the "Current" and "Up Next" boxes
     const availableAppointments = appointmentsToConsider.filter(
         app => app.status !== 'Done' && app.status !== 'Absent'
     );
     const currentPatientInfo = availableAppointments[0] || null;
     const nextPatientInfo = availableAppointments[1] || null;
+
+    const display = {
+        current: doneAppointmentsInView.length,
+        total: appointmentsToConsider.length
+    };
+    
+    // This is purely for visual styling of the list items
+    const overallDone = allTodayAppointments.filter(app => app.status === 'Done');
+    const queue = {
+        currentNumber: overallDone.length > 0 ? Math.max(...overallDone.map(a => a.queueNumber)) : 0
+    };
 
     const schedules = doctorSchedules.filter(s => s.doctorId == userId).map(s => ({
         ...s, clinic: clinics.find(c => c.id === s.clinicId)
@@ -209,7 +208,7 @@ app.get("/dashboard/doctor", (req, res) => {
         doctor,
         appointments: appointmentsToConsider,
         schedules,
-        queue, // Sending the queue object back for styling
+        queue,
         display,
         isClinicQueueCompleted,
         currentPatientInfo,
@@ -843,23 +842,23 @@ app.post("/doctor/next-patient", (req, res) => {
     const { doctorId, clinicId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
 
-    // Get all appointments for the doctor today, sorted by queue number
-    const allTodayAppointments = appointments.filter(app =>
+    // IMPORTANT: This logic now focuses *only* on the relevant clinic from the start.
+    let appointmentsToConsider = appointments.filter(app =>
         app.doctorId == doctorId && app.date === today
-    ).sort((a, b) => a.queueNumber - b.queueNumber);
-
-    // Determine which clinic's queue to advance
-    let appointmentsToConsider = clinicId
-        ? allTodayAppointments.filter(app => app.clinicId == clinicId)
-        : allTodayAppointments;
-
-    // Find the next patient in this specific list who is not done/absent
-    const nextAvailablePatient = appointmentsToConsider.find(app =>
-        app.status !== 'Done' && app.status !== 'Absent'
     );
 
+    // If a clinic is specified, we ONLY work with that clinic's appointments.
+    if (clinicId) {
+        appointmentsToConsider = appointmentsToConsider.filter(app => app.clinicId == clinicId);
+    }
+
+    // Find the next available patient within this specific, filtered list.
+    const nextAvailablePatient = appointmentsToConsider
+        .sort((a, b) => a.queueNumber - b.queueNumber)
+        .find(app => app.status !== 'Done' && app.status !== 'Absent');
+
     if (nextAvailablePatient) {
-        // Find the original appointment in the main list and update its status
+        // Find the patient in the main appointments array by ID and update them.
         const appointmentToUpdate = appointments.find(app => app.id === nextAvailablePatient.id);
         if (appointmentToUpdate) {
             appointmentToUpdate.status = 'Done';
