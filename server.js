@@ -84,9 +84,9 @@ function calculateAge(dob) {
     return age;
 }
 
-function getNextQueueNumber(doctorId, date) {
+function getNextQueueNumber(doctorId, date, clinicId) {
     const todayAppointments = appointments.filter(app =>
-        app.doctorId == doctorId && app.date === date
+        app.doctorId == doctorId && app.date === date && app.clinicId == clinicId
     );
     return todayAppointments.length + 1;
 }
@@ -163,58 +163,62 @@ app.get("/dashboard/patient", (req, res) => {
 });
 
 app.get("/dashboard/doctor", (req, res) => {
-    const { userId, clinicId } = req.query; // clinicId is added
+    const { userId, clinicId } = req.query;
     const doctor = doctors.find(d => d.id == userId);
     if (!doctor) return res.redirect('/login/doctor');
 
     const today = new Date().toISOString().slice(0, 10);
-    
-    // All of the doctor's appointments are taken for queue calculation
+
+    // Get all appointments for the day, this is the master list
     const allTodayAppointments = appointments
         .filter(app => app.doctorId == userId && app.date === today)
         .sort((a, b) => a.queueNumber - b.queueNumber);
 
-    // Initialize or update queue (based on all appointments)
-    if (!doctorQueueStatus[userId] || doctorQueueStatus[userId].date !== today) {
-        doctorQueueStatus[userId] = { currentNumber: 0, totalPatients: allTodayAppointments.length, date: today };
-    } else {
-        doctorQueueStatus[userId].totalPatients = allTodayAppointments.length;
-    }
-    
-    const queue = doctorQueueStatus[userId];
-
-    // If a clinic is selected, the patient list will be filtered
-    const displayAppointments = clinicId 
+    // Determine the list of appointments to actually display on the page
+    const appointmentsToConsider = clinicId
         ? allTodayAppointments.filter(app => app.clinicId == clinicId)
         : allTodayAppointments;
 
-    // Find the next available patients, skipping any marked as "Absent"
-    const availableAppointments = allTodayAppointments.filter(
-        app => app.queueNumber > queue.currentNumber && app.status !== 'Absent'
+    // --- Calculations for the specific view (All or one clinic) ---
+    const doneAppointmentsInView = appointmentsToConsider.filter(app => app.status === 'Done');
+    const isClinicQueueCompleted = doneAppointmentsInView.length >= appointmentsToConsider.length;
+    const display = { // For the main counter and progress bar
+        current: doneAppointmentsInView.length,
+        total: appointmentsToConsider.length
+    };
+
+    // --- Overall Day's Progress (for styling the list) ---
+    const overallDone = allTodayAppointments.filter(app => app.status === 'Done');
+    const queue = { // Used only for styling which items are 'Done'
+        currentNumber: overallDone.length > 0 ? Math.max(...overallDone.map(a => a.queueNumber)) : 0
+    };
+
+    // Find the next patients to show in the "Current" and "Up Next" boxes
+    const availableAppointments = appointmentsToConsider.filter(
+        app => app.status !== 'Done' && app.status !== 'Absent'
     );
-    const currentPatient = availableAppointments[0] || null;
-    const nextPatient = availableAppointments[1] || null;
+    const currentPatientInfo = availableAppointments[0] || null;
+    const nextPatientInfo = availableAppointments[1] || null;
 
     const schedules = doctorSchedules.filter(s => s.doctorId == userId).map(s => ({
         ...s, clinic: clinics.find(c => c.id === s.clinicId)
     }));
-
-    // Find pending requests for this doctor
     const doctorRequests = clinicJoinRequests.filter(req => req.doctorId == userId);
 
-    res.render("doctor-dashboard.ejs", { 
-        doctor, 
-        appointments: displayAppointments, // The filtered list is being sent
-        schedules, 
-        queue,
-        currentPatient, 
-        nextPatient,
-        selectedClinicId: clinicId, // Which clinic is selected is being sent
-        clinics, // Send all clinics for the "add clinic" form
-        doctorRequests // Send pending requests
+    res.render("doctor-dashboard.ejs", {
+        doctor,
+        appointments: appointmentsToConsider,
+        schedules,
+        queue, // Sending the queue object back for styling
+        display,
+        isClinicQueueCompleted,
+        currentPatientInfo,
+        nextPatientInfo,
+        selectedClinicId: clinicId,
+        clinics,
+        doctorRequests
     });
 });
-
 app.get("/dashboard/receptionist", (req, res) => {
     const { userId } = req.query;
     const receptionist = receptionists.find(r => r.id == userId);
@@ -267,7 +271,8 @@ app.post("/book-appointment", (req, res) => {
     const clinic = clinics.find(c => c.id == clinicId);
 
     // Calculate time for the new appointment
-    const queueNumber = getNextQueueNumber(doctorId, date);
+    // Calculate time for the new appointment
+    const queueNumber = getNextQueueNumber(doctorId, date, clinicId);
     const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
     let approxTime = schedule.startTime; // default
     if (doctor.consultationDuration) {
@@ -679,7 +684,7 @@ app.post("/admin/add-appointment", (req, res) => {
         clinicName: clinic.name,
         date, time,
         status: "Confirmed",
-        queueNumber: getNextQueueNumber(doctorId, date)
+        queueNumber: getNextQueueNumber(doctorId, date, clinicId)
     });
     res.redirect(`/dashboard/admin?userId=${adminId}`);
 });
@@ -749,28 +754,38 @@ app.post("/doctor/set-consultation-time", (req, res) => {
 
 app.get("/receptionist/doctor-appointments/:doctorId", (req, res) => {
     const { doctorId } = req.params;
+    const { receptionistId } = req.query; // Get receptionistId from query
+
+    const receptionist = receptionists.find(r => r.id == receptionistId);
+    if (!receptionist) return res.status(404).send("Receptionist not found");
+
+    const clinicId = receptionist.clinicId;
 
     const doctor = doctors.find(d => d.id == doctorId);
     if (!doctor) return res.status(404).send("Doctor not found");
 
-    const schedule = doctorSchedules.find(s => s.doctorId == doctor.id);
-    if (!schedule) return res.status(404).send("Doctor schedule not found");
+    // Find the doctor's schedule for the specific clinic of the receptionist
+    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
+    if (!schedule) return res.status(404).send("Doctor schedule not found for this clinic");
 
-    const clinic = clinics.find(c => c.id === schedule.clinicId);
+    const clinic = clinics.find(c => c.id == clinicId);
+    if (!clinic) return res.status(404).send("Clinic not found");
 
+    // Filter appointments for the specific doctor and clinic
     const appointmentsForClinic = appointments.filter(
-        a => a.doctorId == doctorId && a.clinicId === clinic.id
+        a => a.doctorId == doctorId && a.clinicId == clinicId
     );
 
-    res.render("doctor-appointments.ejs", { 
-        doctor, 
-        appointments: appointmentsForClinic, 
-        clinic 
+    res.render("doctor-appointments.ejs", {
+        doctor,
+        appointments: appointmentsForClinic,
+        clinic,
+        receptionist // Pass receptionist to the view
     });
 });
 
 app.post("/receptionist/add-appointment", (req, res) => {
-    const { doctorId, clinicId, patientName, patientAge } = req.body;
+    const { doctorId, clinicId, patientName, patientAge, receptionistId } = req.body;
 
     if (!doctorId || !clinicId || !patientName || !patientAge) {
         return res.status(400).send("Patient name and age are required.");
@@ -782,7 +797,7 @@ app.post("/receptionist/add-appointment", (req, res) => {
 
     const date = new Date().toISOString().slice(0, 10);
     
-    const queueNumber = getNextQueueNumber(doctorId, date);
+    const queueNumber = getNextQueueNumber(doctorId, date, clinicId);
     const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
     let approxTime = schedule ? schedule.startTime : '00:00';
     if (doctor.consultationDuration && schedule) {
@@ -792,7 +807,7 @@ app.post("/receptionist/add-appointment", (req, res) => {
     }
 
     // --- Daily Limit Check ---
-    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
+    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date && app.clinicId == clinicId).length;
     if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
         return res.status(403).send(`
             <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
@@ -815,78 +830,66 @@ app.post("/receptionist/add-appointment", (req, res) => {
         date,
         time: approxTime,
         status: "Confirmed",
-        queueNumber: getNextQueueNumber(doctorId, date)
+        queueNumber: getNextQueueNumber(doctorId, date, clinicId)
     };
 
     appointments.push(newAppointment);
 
-    res.redirect(`/receptionist/doctor-appointments/${doctorId}`);
+    res.redirect(`/receptionist/doctor-appointments/${doctorId}?receptionistId=${receptionistId}`);
 });
 
 // --- UPDATED Doctor Queue Management Route ---
 app.post("/doctor/next-patient", (req, res) => {
-    const { doctorId } = req.body;
+    const { doctorId, clinicId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
-    
-    const todayAppointments = appointments.filter(app => 
+
+    // Get all appointments for the doctor today, sorted by queue number
+    const allTodayAppointments = appointments.filter(app =>
         app.doctorId == doctorId && app.date === today
     ).sort((a, b) => a.queueNumber - b.queueNumber);
-    
-    if (!doctorQueueStatus[doctorId] || doctorQueueStatus[doctorId].date !== today) {
-        doctorQueueStatus[doctorId] = { 
-            currentNumber: 0, 
-            totalPatients: todayAppointments.length, 
-            date: today 
-        };
-    }
-    
-    const queue = doctorQueueStatus[doctorId];
-    queue.totalPatients = todayAppointments.length;
-    
-    // Find the next available (not absent) patient to be seen
-    const nextAvailablePatient = todayAppointments.find(app => 
-        app.queueNumber > queue.currentNumber && app.status !== 'Absent'
+
+    // Determine which clinic's queue to advance
+    let appointmentsToConsider = clinicId
+        ? allTodayAppointments.filter(app => app.clinicId == clinicId)
+        : allTodayAppointments;
+
+    // Find the next patient in this specific list who is not done/absent
+    const nextAvailablePatient = appointmentsToConsider.find(app =>
+        app.status !== 'Done' && app.status !== 'Absent'
     );
 
     if (nextAvailablePatient) {
-        // Update the current number to the number of the patient being marked as done
-        queue.currentNumber = nextAvailablePatient.queueNumber;
-        
-        // Mark this patient's status as 'Done'
-        nextAvailablePatient.status = 'Done';
-    } else {
-        // If no more available patients, set current number to total to show completion
-        queue.currentNumber = queue.totalPatients;
+        // Find the original appointment in the main list and update its status
+        const appointmentToUpdate = appointments.find(app => app.id === nextAvailablePatient.id);
+        if (appointmentToUpdate) {
+            appointmentToUpdate.status = 'Done';
+        }
     }
-    
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+
+    res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
 });
 
 
 app.post("/doctor/reset-queue", (req, res) => {
-    const { doctorId } = req.body;
+    const { doctorId, clinicId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
     
-    // Get today's appointments
-    const todayAppointments = appointments.filter(app => 
+    let appointmentsToReset = appointments.filter(app => 
         app.doctorId == doctorId && app.date === today
     );
     
-    // Reset queue to beginning
-    doctorQueueStatus[doctorId] = {
-        currentNumber: 0,
-        totalPatients: todayAppointments.length,
-        date: today
-    };
+    if (clinicId) {
+        appointmentsToReset = appointmentsToReset.filter(app => app.clinicId == clinicId);
+    }
     
-    // Reset all appointments status back to 'Confirmed' (optional)
-    todayAppointments.forEach(app => {
-        if (app.status === 'Done' || app.status === 'Absent') {
+    // Reset status of 'Done' appointments back to 'Confirmed' for the selected scope
+    appointmentsToReset.forEach(app => {
+        if (app.status === 'Done') {
             app.status = 'Confirmed';
         }
     });
     
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
 });
 
 // Enhanced API endpoint for real-time queue status

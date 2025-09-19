@@ -13,18 +13,14 @@
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: center;">
             <h2 style="margin: 0; font-size: 2.5rem;">Currently Serving</h2>
             <div style="font-size: 4rem; font-weight: bold; margin: 1rem 0;">
-                #<span id="currentNumber"><%= queue.currentNumber || 0 %></span>
+               #<span id="currentNumber"><%= display.current || 0 %></span>
             </div>
             <p style="margin: 0; font-size: 1.2rem; opacity: 0.9;">
-                Total Today: <%= queue.totalPatients || 0 %> patients
+                Total Today: <%= display.total || 0 %> patients
             </p>
         </div>
 
-        <!-- Current & Next Patient Info -->
-        <% 
-        const currentPatientInfo = appointments.find(app => app.queueNumber === queue.currentNumber);
-        const nextPatientInfo = appointments.find(app => app.queueNumber === (queue.currentNumber + 1));
-        %>
+        
         
         <% if (currentPatientInfo) { %>
             <div style="background: #f0f9ff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #0ea5e9; margin-bottom: 1rem;">
@@ -50,21 +46,22 @@
         <!-- Queue Control Buttons -->
         <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
             <form action="/doctor/next-patient" method="POST" style="flex: 1;">
-                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
-                <button type="submit" class="btn" 
-                        style="width: 100%; background: linear-gradient(135deg, #10b981, #059669); font-size: 1.1rem; padding: 1rem;"
-                        <%= (queue.currentNumber >= queue.totalPatients) ? 'disabled' : '' %>>
-                    ✅ Patient Done - Next Please
-                </button>
-            </form>
+            <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+            <input type="hidden" name="clinicId" value="<%= selectedClinicId || '' %>">
+            <button type="submit" class="btn" 
+            style="width: 100%; background: linear-gradient(135deg, #10b981, #059669); font-size: 1.1rem; padding: 1rem;"
+            <%= isClinicQueueCompleted ? 'disabled' : '' %>>
+        ✅ Patient Done - Next Please
+    </button>
+</form>
         </div>
 
         <!-- Queue Progress Bar -->
         <div style="background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
-            <div style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: <%= queue.totalPatients > 0 ? ((queue.currentNumber / queue.totalPatients) * 100).toFixed(2) : 0 %>%; transition: width 0.3s ease;"></div>
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: <%= display.total > 0 ? ((display.current / display.total) * 100).toFixed(2) : 0 %>%; transition: width 0.3s ease;"></div>
         </div>
         <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin: 0;">
-            Progress: <%= queue.currentNumber %> of <%= queue.totalPatients %> patients completed
+            Progress: <%= display.current %> of <%= display.total %> patients completed
         </p>
     </div>
 
@@ -299,13 +296,14 @@
         <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e2e8f0;">
             <h4 style="color: #f59e0b;">Controls</h4>
             <form action="/doctor/reset-queue" method="POST" 
-                  onsubmit="return confirm('Are you sure you want to reset the queue counter? This will only set the patient number to 0, not delete the list.')" style="margin-bottom: 1rem;">
-                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
-                <button type="submit" class="btn" 
-                        style="background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 0.9rem; width: 100%;">
-                    🔄 Queue Counter Reset
-                </button>
-            </form>
+            onsubmit="return confirm('Are you sure you want to reset the queue counter? This will only set the patient number to 0, not delete the list.')" style="margin-bottom: 1rem;">
+            <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+            <input type="hidden" name="clinicId" value="<%= selectedClinicId || '' %>">
+            <button type="submit" class="btn" 
+            style="background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 0.9rem; width: 100%;">
+                🔄 Queue Counter Reset
+    </button>
+</form>
             <form action="/doctor/clear-list" method="POST" 
                   onsubmit="return confirm('Sotorkota! Apni ki ajker shob appointment muche felte chan? Ei kaaj-ti ferano jabe na.')">
                 <input type="hidden" name="doctorId" value="<%= doctor.id %>">

@@ -111,7 +111,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <!-- Doctor Info -->
                             <div style="flex-grow: 1;">
-                                <a href="/receptionist/doctor-appointments/<%= doc.id %>" style="text-decoration: none; color: inherit;">
+                              <a href="/receptionist/doctor-appointments/<%= doc.id %>?receptionistId=<%= receptionist.id %>" style="text-decoration: none; color: inherit;">
                                     <strong><%= doc.name %></strong>
                                 </a> 
                                 (<%= doc.specialty %>)<br>

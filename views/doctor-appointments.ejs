@@ -28,6 +28,7 @@
 <form action="/receptionist/add-appointment" method="POST">
     <input type="hidden" name="doctorId" value="<%= doctor.id %>">
     <input type="hidden" name="clinicId" value="<%= clinic.id %>">
+    <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
 
     <div class="form-group">
         <label for="patientName">Patient Name</label>
