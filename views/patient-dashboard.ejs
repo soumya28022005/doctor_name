@@ -134,74 +134,62 @@
     }
 
     async function updateLiveQueueStatus() {
-        const queueElements = document.querySelectorAll('.live-queue-status');
-        
-        for (const element of queueElements) {
-            const doctorId = element.dataset.doctorId;
-            const queueNumber = parseInt(element.dataset.queueNumber);
-            
-            try {
-                const response = await fetch(`/api/queue-status/${doctorId}`);
-                const queueData = await response.json();
-                
-                const statusText = element.querySelector('.current-status-text');
-                const queueInfo = element.querySelector('.queue-info');
-                const estimatedTime = element.querySelector('.estimated-time');
-                const indicator = element.querySelector('.pulse-indicator');
-                
-                let message = '';
-                let info = '';
-                let timeInfo = '';
-                let indicatorColor = '#64748b';
-                
-                if (queueData.currentNumber === 0) {
-                    message = '🕐 Queue not started yet';
-                    info = `You are #${queueNumber} in line`;
-                    timeInfo = 'Please arrive 15 minutes before your scheduled time';
-                } else if (queueNumber <= queueData.currentNumber) {
-                    message = '✅ Your turn has passed or completed';
-                    info = 'Please check with the clinic if you missed your slot';
-                    indicatorColor = '#22c55e';
-                    timeInfo = 'Contact clinic for rescheduling if needed';
-                } else if (queueNumber === queueData.currentNumber + 1) {
-                    message = '🎯 YOU\'RE NEXT! Please get ready';
-                    info = 'Current patient being served - you\'re up next';
-                    indicatorColor = '#f59e0b';
-                    timeInfo = '⚠️ Please be ready and wait near the clinic door';
-                } else {
-                    const patientsAhead = queueNumber - queueData.currentNumber - 1;
-                    message = `⏳ ${patientsAhead} patients ahead of you`;
-                    info = `Currently serving #${queueData.currentNumber}`;
-                    const estimatedMinutes = patientsAhead * 15; // Assume 15 min per patient
-                    timeInfo = `Estimated wait: ~${estimatedMinutes} minutes`;
-                }
-                
-                statusText.textContent = message;
-                queueInfo.textContent = info;
-                estimatedTime.textContent = timeInfo;
-                indicator.style.background = indicatorColor;
-                
-                // Special styling for "You're next"
-                if (queueNumber === queueData.currentNumber + 1) {
-                    element.querySelector('.live-queue-status > div').style.background = 
-                        'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-                    estimatedTime.style.background = '#fef3c7';
-                    estimatedTime.style.color = '#92400e';
-                } else if (queueNumber <= queueData.currentNumber) {
-                    element.querySelector('.live-queue-status > div').style.background = 
-                        'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
-                    estimatedTime.style.background = '#dcfce7';
-                    estimatedTime.style.color = '#166534';
-                }
-                
-            } catch (error) {
-                const statusText = element.querySelector('.current-status-text');
-                const queueInfo = element.querySelector('.queue-info');
-                statusText.textContent = '❌ Unable to load queue status';
-                queueInfo.textContent = 'Please refresh the page or contact clinic';
+    const queueElements = document.querySelectorAll('.live-queue-status');
+    for (const element of queueElements) {
+        const doctorId = element.dataset.doctorId;
+        const queueNumber = parseInt(element.dataset.queueNumber);
+
+        try {
+            // Corrected API endpoint
+            const response = await fetch(`/api/queue-status/${doctorId}`);
+            const queueData = await response.json();
+
+            const statusText = element.querySelector('.current-status-text');
+            const queueInfo = element.querySelector('.queue-info');
+            const estimatedTime = element.querySelector('.estimated-time');
+            const indicator = element.querySelector('.pulse-indicator');
+
+            let message = '';
+            let info = '';
+            let timeInfo = '';
+            let indicatorColor = '#64748b'; // Grey as default
+
+            if (queueData.currentNumber === 0) {
+                message = '🕐 Queue has not started yet';
+                info = `You are #${queueNumber} in line`;
+                timeInfo = 'Please arrive 15 minutes before your scheduled time';
+            } else if (queueNumber <= queueData.currentNumber) {
+                message = '✅ Your turn is over';
+                info = 'Please contact the clinic if you have missed your turn';
+                indicatorColor = '#22c55e'; // Green
+                timeInfo = 'Contact the clinic for rescheduling if needed';
+            } else if (queueNumber === queueData.currentNumber + 1) {
+                message = "🎯 You're NEXT!";
+                info = `Currently serving #${queueData.currentNumber}`;
+                indicatorColor = '#f59e0b'; // Amber
+                timeInfo = '⚠️ Please be ready and wait near the clinic';
+            } else {
+                const patientsAhead = queueNumber - queueData.currentNumber - 1;
+                message = `⏳ ${patientsAhead} patients ahead of you`;
+                info = `Currently serving #${queueData.currentNumber}`;
+                const estimatedMinutes = patientsAhead * 15; // Assuming 15 mins per patient
+                timeInfo = `Estimated wait: ~${estimatedMinutes} minutes`;
+                indicatorColor = '#3b82f6'; // Blue for waiting
             }
+
+            statusText.textContent = message;
+            queueInfo.textContent = info;
+            estimatedTime.textContent = timeInfo;
+            indicator.style.background = indicatorColor;
+
+        } catch (error) {
+            const statusText = element.querySelector('.current-status-text');
+            const queueInfo = element.querySelector('.queue-info');
+            statusText.textContent = '❌ Unable to load queue status';
+            queueInfo.textContent = 'Please refresh the page or contact the clinic';
         }
     }
+}
 
     // Initial load and periodic updates
     document.addEventListener('DOMContentLoaded', () => {

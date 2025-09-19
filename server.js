@@ -838,6 +838,7 @@ app.post("/receptionist/add-appointment", (req, res) => {
 });
 
 // --- UPDATED Doctor Queue Management Route ---
+// --- UPDATED Doctor Queue Management Route ---
 app.post("/doctor/next-patient", (req, res) => {
     const { doctorId, clinicId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
@@ -862,6 +863,19 @@ app.post("/doctor/next-patient", (req, res) => {
         const appointmentToUpdate = appointments.find(app => app.id === nextAvailablePatient.id);
         if (appointmentToUpdate) {
             appointmentToUpdate.status = 'Done';
+
+            // *** START: NEW CODE TO UPDATE LIVE QUEUE STATUS ***
+            // Initialize or find the queue status for the doctor
+            if (!doctorQueueStatus[doctorId] || doctorQueueStatus[doctorId].date !== today) {
+                doctorQueueStatus[doctorId] = {
+                    date: today,
+                    currentNumber: 0,
+                    totalPatients: appointmentsToConsider.length
+                };
+            }
+            // Update the current number to the patient who just finished
+            doctorQueueStatus[doctorId].currentNumber = appointmentToUpdate.queueNumber;
+            // *** END: NEW CODE TO UPDATE LIVE QUEUE STATUS ***
         }
     }
 
