@@ -788,3 +788,15 @@ input[type="checkbox"]:hover {
         max-width: 1600px;
     }
 }
+
+/* Doctor Settings Grid */
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.settings-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem; /* A slightly larger gap can be nice on mobile */
+}
