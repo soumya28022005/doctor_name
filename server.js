@@ -55,7 +55,7 @@ let appointments = [
     }
 ];
 
-// --- NEW: Live Queue Tracking ---
+// --- Live Queue Tracking ---
 let doctorQueueStatus = {
     // Example: "1": { currentNumber: 0, totalPatients: 5, date: "2025-09-19" }
 };
@@ -65,6 +65,11 @@ let last_patient_id = 1, last_doctors_id = 2, last_receptionists_id = 2, last_ad
 let last_appointment_id = 1, last_clinic_id = 2, last_schedule_id = 3;
 
 // --- Helper Functions ---
+function timeToMinutes(time) {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+}
+
 function calculateAge(dob) {
     const birthDate = new Date(dob);
     const today = new Date();
@@ -155,18 +160,18 @@ app.get("/dashboard/patient", (req, res) => {
 });
 
 app.get("/dashboard/doctor", (req, res) => {
-    const { userId, clinicId } = req.query; // clinicId add kora holo
+    const { userId, clinicId } = req.query; // clinicId is added
     const doctor = doctors.find(d => d.id == userId);
     if (!doctor) return res.redirect('/login/doctor');
 
     const today = new Date().toISOString().slice(0, 10);
     
-    // Doctor-er shob appointment neoa holo queue calculation-er jonno
+    // All of the doctor's appointments are taken for queue calculation
     const allTodayAppointments = appointments
         .filter(app => app.doctorId == userId && app.date === today)
         .sort((a, b) => a.queueNumber - b.queueNumber);
 
-    // Initialize or update queue (shob appointment-er upor ভিত্তি করে)
+    // Initialize or update queue (based on all appointments)
     if (!doctorQueueStatus[userId] || doctorQueueStatus[userId].date !== today) {
         doctorQueueStatus[userId] = { currentNumber: 0, totalPatients: allTodayAppointments.length, date: today };
     } else {
@@ -175,7 +180,7 @@ app.get("/dashboard/doctor", (req, res) => {
     
     const queue = doctorQueueStatus[userId];
 
-    // Clinic select kora thakle patient list filter kora hobe
+    // If a clinic is selected, the patient list will be filtered
     const displayAppointments = clinicId 
         ? allTodayAppointments.filter(app => app.clinicId == clinicId)
         : allTodayAppointments;
@@ -193,12 +198,12 @@ app.get("/dashboard/doctor", (req, res) => {
 
     res.render("doctor-dashboard.ejs", { 
         doctor, 
-        appointments: displayAppointments, // Filter kora list pathano hocche
+        appointments: displayAppointments, // The filtered list is being sent
         schedules, 
         queue,
         currentPatient, 
         nextPatient,
-        selectedClinicId: clinicId // Kon clinic select kora ache, sheta pathano hocche
+        selectedClinicId: clinicId // Which clinic is selected is being sent
     });
 });
 
@@ -249,28 +254,55 @@ app.post("/book-appointment", (req, res) => {
     const patient = patients.find(p => p.id == patientId);
     const clinic = clinics.find(c => c.id == clinicId);
 
-    // --- Daily Limit Check ---
-    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
-    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Book failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>-er ${date} all cpmplete (<strong>${doctor.dailyLimit}</strong>) shesh hoye geche.</p>
-                <p style="margin-top: 0.5rem;">Onugroho kore onno kono din ba onno doctor-er jonno chesta korun.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Pichone Jaan</a>
-            </div>
-        `);
-    }
-
+    // Calculate time for the new appointment
     const queueNumber = getNextQueueNumber(doctorId, date);
-
-    // Calculate approx time = doctor start time + (queueNumber-1)*consultationDuration
     const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
     let approxTime = schedule.startTime; // default
     if (doctor.consultationDuration) {
         const start = new Date(`${date}T${schedule.startTime}`);
         start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
         approxTime = start.toTimeString().slice(0,5);
+    }
+
+    // --- SLOT OVERLAP CHECK ---
+    const newAppStartTime = timeToMinutes(approxTime);
+    const newAppEndTime = newAppStartTime + doctor.consultationDuration;
+
+    const conflictingAppointment = appointments.find(app => {
+        if (app.patientId != patientId || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
+            return false;
+        }
+        const existingDoctor = doctors.find(d => d.id === app.doctorId);
+        const existingAppStartTime = timeToMinutes(app.time);
+        const existingAppEndTime = existingAppStartTime + existingDoctor.consultationDuration;
+
+        // Check for overlap
+        return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
+    });
+
+    if (conflictingAppointment) {
+        const conflictingDoctor = doctors.find(d => d.id === conflictingAppointment.doctorId);
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Booking Failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">You already have an appointment with <strong>Dr. ${conflictingDoctor.name}</strong> at <strong>${conflictingAppointment.time}</strong>.</p>
+                <p style="margin-top: 0.5rem;">You cannot book another appointment during this time as it conflicts with your existing one.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
+            </div>
+        `);
+    }
+
+    // --- Daily Limit Check for the doctor ---
+    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
+    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Booking Failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>'s appointments for ${date} are full. The daily limit of (<strong>${doctor.dailyLimit}</strong>) has been reached.</p>
+                <p style="margin-top: 0.5rem;">Please try booking for another day or with a different doctor.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
+            </div>
+        `);
     }
 
     const newAppointment = {
@@ -307,7 +339,7 @@ app.post("/doctor/set-limit", (req, res) => {
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
-// --- Notun Route: Doctor-er clinic schedule delete korar jonno ---
+// --- New Route: For deleting a doctor's clinic schedule ---
 app.post("/doctor/delete-schedule", (req, res) => {
     const { doctorId, scheduleId } = req.body;
     
@@ -516,15 +548,42 @@ app.post("/admin/add-appointment", (req, res) => {
     const doctor = doctors.find(d => d.id == doctorId);
     const clinic = clinics.find(c => c.id == clinicId);
 
+    // --- SLOT OVERLAP CHECK ---
+    const newAppStartTime = timeToMinutes(time);
+    const newAppEndTime = newAppStartTime + doctor.consultationDuration;
+
+    const conflictingAppointment = appointments.find(app => {
+        if (app.patientId != patientId || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
+            return false;
+        }
+        const existingDoctor = doctors.find(d => d.id === app.doctorId);
+        const existingAppStartTime = timeToMinutes(app.time);
+        const existingAppEndTime = existingAppStartTime + existingDoctor.consultationDuration;
+
+        return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
+    });
+
+    if (conflictingAppointment) {
+        const conflictingDoctor = doctors.find(d => d.id === conflictingAppointment.doctorId);
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Booking Failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">The patient, <strong>${patient.name}</strong>, already has an appointment with <strong>Dr. ${conflictingDoctor.name}</strong> at <strong>${conflictingAppointment.time}</strong>.</p>
+                <p style="margin-top: 0.5rem;">You cannot book another appointment for this patient during that time as it conflicts with their existing one.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
+            </div>
+        `);
+    }
+
     // --- Daily Limit Check ---
     const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
     if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
         return res.status(403).send(`
             <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Sompurno Hoyni</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">Dukkhito, <strong>Dr. ${doctor.name}</strong>-er ${date} tarikh-er jonno patient dekhar shima (<strong>${doctor.dailyLimit}</strong>) shesh hoye geche.</p>
-                <p style="margin-top: 0.5rem;">Onugroho kore onno kono din ba onno doctor-er jonno chesta korun.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Pichone Jaan</a>
+                <h1 style="color: #991b1b;">Booking Failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>'s appointments for ${date} are full. The daily limit of (<strong>${doctor.dailyLimit}</strong>) has been reached.</p>
+                <p style="margin-top: 0.5rem;">Please try booking for another day or with a different doctor.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
             </div>
         `);
     }
@@ -636,43 +695,66 @@ app.post("/receptionist/add-appointment", (req, res) => {
         return res.status(400).send("Patient name and age are required.");
     }
 
-    // Find doctor, clinic
     const doctor = doctors.find(d => d.id == doctorId);
     const clinic = clinics.find(c => c.id == clinicId);
-
     if (!doctor || !clinic) return res.status(404).send("Doctor or clinic not found");
 
     const date = new Date().toISOString().slice(0, 10);
+    
+    const queueNumber = getNextQueueNumber(doctorId, date);
+    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
+    let approxTime = schedule ? schedule.startTime : '00:00';
+    if (doctor.consultationDuration && schedule) {
+        const start = new Date(`${date}T${schedule.startTime}`);
+        start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
+        approxTime = start.toTimeString().slice(0,5);
+    }
+    
+    // --- SLOT OVERLAP CHECK for walk-in patient ---
+    const formattedPatientName = `${patientName} (Age: ${patientAge})`;
+    const newAppStartTime = timeToMinutes(approxTime);
+    const newAppEndTime = newAppStartTime + doctor.consultationDuration;
+
+    const conflictingAppointment = appointments.find(app => {
+        if (app.patientName !== formattedPatientName || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
+            return false;
+        }
+        const existingDoctor = doctors.find(d => d.id === app.doctorId);
+        const existingAppStartTime = timeToMinutes(app.time);
+        const existingAppEndTime = existingAppStartTime + existingDoctor.consultationDuration;
+
+        return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
+    });
+
+    if (conflictingAppointment) {
+        const conflictingDoctor = doctors.find(d => d.id === conflictingAppointment.doctorId);
+        return res.status(403).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
+                <h1 style="color: #991b1b;">Booking Failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">This patient, <strong>${patientName}</strong>, already has a conflicting appointment with <strong>Dr. ${conflictingDoctor.name}</strong> at <strong>${conflictingAppointment.time}</strong>.</p>
+                <p style="margin-top: 0.5rem;">You cannot book another appointment during this time slot.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
+            </div>
+        `);
+    }
 
     // --- Daily Limit Check ---
     const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
     if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
         return res.status(403).send(`
             <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Sompurno Hoyni</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">Dukkhito, <strong>Dr. ${doctor.name}</strong>-er ${date} tarikh-er jonno patient dekhar shima (<strong>${doctor.dailyLimit}</strong>) shesh hoye geche.</p>
-                <p style="margin-top: 0.5rem;">Onugroho kore onno kono din ba onno doctor-er jonno chesta korun.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Pichone Jaan</a>
+                <h1 style="color: #991b1b;">Booking Failed</h1>
+                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>'s appointments for ${date} are full. The daily limit of (<strong>${doctor.dailyLimit}</strong>) has been reached.</p>
+                <p style="margin-top: 0.5rem;">Please try booking for another day or with a different doctor.</p>
+                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
             </div>
         `);
     }
 
-    const queueNumber = getNextQueueNumber(doctorId, date);
-
-    // Calculate approx time
-    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
-    let approxTime = schedule ? schedule.startTime : '00:00'; // default
-    if (doctor.consultationDuration && schedule) {
-        const start = new Date(`${date}T${schedule.startTime}`);
-        start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
-        approxTime = start.toTimeString().slice(0,5);
-    }
-
-    // Add appointment
     const newAppointment = {
         id: ++last_appointment_id,
-        patientId: null, // receptionist may add a patient manually later
-        patientName: `${patientName} (Age: ${patientAge})`,
+        patientId: null,
+        patientName: formattedPatientName,
         doctorId: parseInt(doctorId),
         doctorName: doctor.name,
         clinicId: parseInt(clinicId),
@@ -923,4 +1005,3 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
-

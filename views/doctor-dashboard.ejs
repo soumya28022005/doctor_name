@@ -239,7 +239,7 @@
     const nextForm = document.querySelector('form[action="/doctor/next-patient"]');
     if (nextForm) {
         nextForm.addEventListener('submit', function(e) {
-            if (!confirm(`Apni ki poroborti patient-ke deke nite nishchit?`)) {
+            if (!confirm(` Are you sure you want to call the next patient?`)) {
                 e.preventDefault();
             }
         });
