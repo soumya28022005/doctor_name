@@ -694,6 +694,19 @@ app.post("/receptionist/add-appointment", (req, res) => {
     if (!doctorId || !clinicId || !patientName || !patientAge) {
         return res.status(400).send("Patient name and age are required.");
     }
+    
+    // --- FIX: Create a new patient record for the walk-in ---
+    const newPatient = {
+        id: ++last_patient_id,
+        name: patientName,
+        dob: `N/A (Age: ${patientAge})`, // Storing age since DOB is not provided
+        mobile: "N/A", // Not provided in walk-in form
+        username: `walkin_${patientName.toLowerCase().replace(/\s/g, '')}_${last_patient_id}`, // Generate a unique username
+        password: "password" // Default password
+    };
+    patients.push(newPatient);
+    // --- END FIX ---
+
 
     const doctor = doctors.find(d => d.id == doctorId);
     const clinic = clinics.find(c => c.id == clinicId);
@@ -710,13 +723,12 @@ app.post("/receptionist/add-appointment", (req, res) => {
         approxTime = start.toTimeString().slice(0,5);
     }
     
-    // --- SLOT OVERLAP CHECK for walk-in patient ---
-    const formattedPatientName = `${patientName} (Age: ${patientAge})`;
+    // Using the same conflict and limit checks as other appointment creations
     const newAppStartTime = timeToMinutes(approxTime);
     const newAppEndTime = newAppStartTime + doctor.consultationDuration;
 
     const conflictingAppointment = appointments.find(app => {
-        if (app.patientName !== formattedPatientName || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
+        if (app.patientId !== newPatient.id || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
             return false;
         }
         const existingDoctor = doctors.find(d => d.id === app.doctorId);
@@ -753,8 +765,8 @@ app.post("/receptionist/add-appointment", (req, res) => {
 
     const newAppointment = {
         id: ++last_appointment_id,
-        patientId: null,
-        patientName: formattedPatientName,
+        patientId: newPatient.id, // Use the new patient's ID
+        patientName: newPatient.name, // Use the clean name from the new patient object
         doctorId: parseInt(doctorId),
         doctorName: doctor.name,
         clinicId: parseInt(clinicId),

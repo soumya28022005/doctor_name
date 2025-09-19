@@ -1,0 +1,31 @@
+<%- include('partials/header.ejs') %>
+
+<div class="container">
+    <h1>Search Results</h1>
+    <div class="dashboard-grid">
+        <% if(results.length > 0) { %>
+            <% results.forEach(doctor => { %>
+                <div class="card">
+                    <h3><%= doctor.name %> - <%= doctor.specialty %></h3>
+                    <% if(doctor.schedules.length > 0) { %>
+                        <h4>Available at:</h4>
+                        <ul>
+                            <% doctor.schedules.forEach(schedule => { %>
+                                <li>
+                                    <strong><%= schedule.clinicName %></strong>: 
+                                    <%= schedule.days %> from <%= schedule.startTime %> to <%= schedule.endTime %>
+                                </li>
+                            <% }) %>
+                        </ul>
+                    <% } else { %>
+                        <p>No schedules found for this doctor.</p>
+                    <% } %>
+                </div>
+            <% }) %>
+        <% } else { %>
+            <p>No doctors found matching your search.</p>
+        <% } %>
+    </div>
+</div>
+
+<%- include('partials/footer.ejs') %>
