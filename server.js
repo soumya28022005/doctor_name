@@ -410,20 +410,32 @@ app.post("/admin/add-doctor", (req, res) => {
         });
     }
 
+    // Handle single or multiple custom addresses
     if (customAddress) {
-        const newClinic = { id: ++last_clinic_id, name: `${name}'s Private Practice`, address: customAddress, phone: "N/A" };
-        clinics.push(newClinic);
-        doctorSchedules.push({
-            id: ++last_schedule_id,
-            doctorId: newDoctor.id,
-            clinicId: newClinic.id,
-            startTime, endTime,
-            days: Array.isArray(days) ? days.join(', ') : days
+        const addresses = Array.isArray(customAddress) ? customAddress : [customAddress];
+        addresses.forEach(address => {
+            if (address.trim() !== '') { // Ensure we don't create clinics for empty strings
+                const newClinic = { 
+                    id: ++last_clinic_id, 
+                    name: `${name}'s Private Practice`, 
+                    address: address, 
+                    phone: "N/A" 
+                };
+                clinics.push(newClinic);
+                doctorSchedules.push({
+                    id: ++last_schedule_id,
+                    doctorId: newDoctor.id,
+                    clinicId: newClinic.id,
+                    startTime, endTime,
+                    days: Array.isArray(days) ? days.join(', ') : days
+                });
+            }
         });
     }
 
     res.redirect(`/dashboard/admin?userId=${adminId}`);
 });
+
 
 app.post("/admin/add-clinic", (req, res) => {
     const { name, address, phone, adminId } = req.body;
@@ -868,4 +880,3 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
-

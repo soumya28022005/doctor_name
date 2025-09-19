@@ -7,15 +7,16 @@
         <h3>Clinics</h3>
         <ul>
             <% clinics.forEach(c => { %>
-                <li><%= c.name %> <form action="/admin/delete-clinic" method="POST" style="display:inline;"><input type="hidden" name="clinicId" value="<%= c.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit">Delete</button></form></li>
+                <li><%= c.name %> (<%= c.address %>) <form action="/admin/delete-clinic" method="POST" style="display:inline;"><input type="hidden" name="clinicId" value="<%= c.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit" class="btn btn-danger btn-small">Delete</button></form></li>
             <% }) %>
         </ul>
-        <form action="/admin/add-clinic" method="POST">
+        <h4 style="margin-top: 2rem;">Add New Clinic</h4>
+        <form action="/admin/add-clinic" method="POST" class="form-block">
             <input type="hidden" name="adminId" value="<%= admin.id %>">
             <input type="text" name="name" placeholder="Clinic Name" required>
             <input type="text" name="address" placeholder="Address" required>
             <input type="text" name="phone" placeholder="Phone" required>
-            <button type="submit">Add Clinic</button>
+            <button type="submit" class="btn">Add Clinic</button>
         </form>
     </div>
 
@@ -23,27 +24,42 @@
         <h3>Doctors</h3>
         <ul>
             <% doctors.forEach(d => { %>
-                <li><%= d.name %> - <%= d.specialty %> <form action="/admin/delete-doctor" method="POST" style="display:inline;"><input type="hidden" name="doctorId" value="<%= d.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit">Delete</button></form></li>
+                <li><%= d.name %> - <%= d.specialty %> <form action="/admin/delete-doctor" method="POST" style="display:inline;"><input type="hidden" name="doctorId" value="<%= d.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit" class="btn btn-danger btn-small">Delete</button></form></li>
             <% }) %>
         </ul>
-        <form action="/admin/add-doctor" method="POST">
+        <h4 style="margin-top: 2rem;">Add New Doctor</h4>
+        <form action="/admin/add-doctor" method="POST" class="form-block">
             <input type="hidden" name="adminId" value="<%= admin.id %>">
             <input type="text" name="name" placeholder="Doctor Name" required>
             <input type="text" name="specialty" placeholder="Specialty" required>
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
             <input type="number" name="dailyLimit" placeholder="Daily Patient Limit" required>
-            <div>
-                <label>Assign to Clinics:</label><br>
+            
+            <div style="margin-top: 1rem;">
+                <label><strong>Assign to Existing Clinics:</strong></label><br>
                 <% clinics.forEach(c => { %>
-                    <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %><br>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: normal;">
+                        <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %>
+                    </label>
                 <% }) %>
             </div>
-            <input type="text" name="customAddress" placeholder="Or, Private Practice Address">
+
+            <div style="margin-top: 1rem;" id="private-clinics-container">
+                <label><strong>Or, Add Private Practice Locations:</strong></label>
+                <div class="clinic-entry" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                    <input type="text" name="customAddress" placeholder="Private Practice Address" style="flex-grow: 1;">
+                </div>
+            </div>
+            <button type="button" id="add-clinic-btn" class="btn btn-secondary btn-small" style="margin-bottom: 1rem;">+ Add Another Clinic</button>
+            
+            <hr style="margin: 1rem 0;">
+
+            <label><strong>Set Schedule for ALL Assigned Clinics:</strong></label>
             <input type="time" name="startTime" required>
             <input type="time" name="endTime" required>
             <input type="text" name="days" placeholder="e.g., Monday, Wednesday" required>
-            <button type="submit">Add Doctor</button>
+            <button type="submit" class="btn" style="margin-top: 1rem; width: 100%;">Add Doctor</button>
         </form>
     </div>
 
@@ -51,17 +67,18 @@
         <h3>Patients</h3>
         <ul>
             <% patients.forEach(p => { %>
-                <li><%= p.name %> <form action="/admin/delete-patient" method="POST" style="display:inline;"><input type="hidden" name="patientId" value="<%= p.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit">Delete</button></form></li>
+                <li><%= p.name %> <form action="/admin/delete-patient" method="POST" style="display:inline;"><input type="hidden" name="patientId" value="<%= p.id %>"><input type="hidden" name="adminId" value="<%= admin.id %>"><button type="submit" class="btn btn-danger btn-small">Delete</button></form></li>
             <% }) %>
         </ul>
-        <form action="/admin/add-patient" method="POST">
+        <h4 style="margin-top: 2rem;">Add New Patient</h4>
+        <form action="/admin/add-patient" method="POST" class="form-block">
             <input type="hidden" name="adminId" value="<%= admin.id %>">
             <input type="text" name="name" placeholder="Patient Name" required>
             <input type="date" name="dob" required>
             <input type="text" name="mobile" placeholder="Mobile" required>
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Add Patient</button>
+            <button type="submit" class="btn">Add Patient</button>
         </form>
     </div>
     
@@ -96,8 +113,8 @@
             </tbody>
         </table>
         
-        <h4>Add Appointment (Admin)</h4>
-        <form action="/admin/add-appointment" method="POST">
+        <h4 style="margin-top: 2rem;">Add Appointment (Admin)</h4>
+        <form action="/admin/add-appointment" method="POST" class="form-block">
              <input type="hidden" name="adminId" value="<%= admin.id %>">
              <select name="patientId" required>
                 <% patients.forEach(p => { %>
@@ -116,9 +133,36 @@
              </select>
              <input type="date" name="date" required>
              <input type="time" name="time" required>
-             <button type="submit">Add Appointment</button>
+             <button type="submit" class="btn">Add Appointment</button>
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const addClinicBtn = document.getElementById('add-clinic-btn');
+    if (addClinicBtn) {
+        addClinicBtn.addEventListener('click', function() {
+            const container = document.getElementById('private-clinics-container');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'clinic-entry';
+            newEntry.style.display = 'flex';
+            newEntry.style.gap = '10px';
+            newEntry.style.marginBottom = '10px';
+            newEntry.style.alignItems = 'center';
+            
+            newEntry.innerHTML = `
+                <input type="text" name="customAddress" placeholder="Another Private Practice Address" style="flex-grow: 1;">
+                <button type="button" class="btn btn-danger btn-small remove-clinic-btn">Remove</button>
+            `;
+            container.appendChild(newEntry);
+
+            newEntry.querySelector('.remove-clinic-btn').addEventListener('click', function() {
+                newEntry.remove();
+            });
+        });
+    }
+});
+</script>
 
 <%- include('partials/footer.ejs') %>
