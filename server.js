@@ -155,26 +155,33 @@ app.get("/dashboard/patient", (req, res) => {
 });
 
 app.get("/dashboard/doctor", (req, res) => {
-    const { userId } = req.query;
+    const { userId, clinicId } = req.query; // clinicId add kora holo
     const doctor = doctors.find(d => d.id == userId);
     if (!doctor) return res.redirect('/login/doctor');
 
     const today = new Date().toISOString().slice(0, 10);
-    const todayAppointments = appointments
+    
+    // Doctor-er shob appointment neoa holo queue calculation-er jonno
+    const allTodayAppointments = appointments
         .filter(app => app.doctorId == userId && app.date === today)
         .sort((a, b) => a.queueNumber - b.queueNumber);
 
-    // Initialize or update queue
+    // Initialize or update queue (shob appointment-er upor ভিত্তি করে)
     if (!doctorQueueStatus[userId] || doctorQueueStatus[userId].date !== today) {
-        doctorQueueStatus[userId] = { currentNumber: 0, totalPatients: todayAppointments.length, date: today };
+        doctorQueueStatus[userId] = { currentNumber: 0, totalPatients: allTodayAppointments.length, date: today };
     } else {
-        doctorQueueStatus[userId].totalPatients = todayAppointments.length;
+        doctorQueueStatus[userId].totalPatients = allTodayAppointments.length;
     }
     
     const queue = doctorQueueStatus[userId];
 
+    // Clinic select kora thakle patient list filter kora hobe
+    const displayAppointments = clinicId 
+        ? allTodayAppointments.filter(app => app.clinicId == clinicId)
+        : allTodayAppointments;
+
     // Find the next available patients, skipping any marked as "Absent"
-    const availableAppointments = todayAppointments.filter(
+    const availableAppointments = allTodayAppointments.filter(
         app => app.queueNumber > queue.currentNumber && app.status !== 'Absent'
     );
     const currentPatient = availableAppointments[0] || null;
@@ -186,11 +193,12 @@ app.get("/dashboard/doctor", (req, res) => {
 
     res.render("doctor-dashboard.ejs", { 
         doctor, 
-        appointments: todayAppointments, 
+        appointments: displayAppointments, // Filter kora list pathano hocche
         schedules, 
         queue,
-        currentPatient, // Pass the correct current patient
-        nextPatient // Pass the correct next patient
+        currentPatient, 
+        nextPatient,
+        selectedClinicId: clinicId // Kon clinic select kora ache, sheta pathano hocche
     });
 });
 
@@ -299,6 +307,20 @@ app.post("/doctor/set-limit", (req, res) => {
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
+// --- Notun Route: Doctor-er clinic schedule delete korar jonno ---
+app.post("/doctor/delete-schedule", (req, res) => {
+    const { doctorId, scheduleId } = req.body;
+    
+    const scheduleIndex = doctorSchedules.findIndex(s => s.id == scheduleId && s.doctorId == doctorId);
+    
+    if (scheduleIndex > -1) {
+        doctorSchedules.splice(scheduleIndex, 1);
+    }
+    
+    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+});
+
+
 // --- NEW ROUTE: Clear Today's Appointments ---
 app.post("/doctor/clear-list", (req, res) => {
     const { doctorId } = req.body;
@@ -319,6 +341,41 @@ app.post("/doctor/clear-list", (req, res) => {
     }
 
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+});
+
+// --- Receptionist Actions ---
+app.post("/receptionist/add-doctor", (req, res) => {
+    const { receptionistId, name, specialty, username, password, startTime, endTime, days, customSchedule } = req.body;
+    
+    const receptionist = receptionists.find(r => r.id == receptionistId);
+    if (!receptionist) {
+        return res.status(404).send("Receptionist not found.");
+    }
+    
+    const newDoctor = {
+        id: ++last_doctors_id,
+        name,
+        specialty,
+        username,
+        password,
+        dailyLimit: 20, // Default daily limit
+        consultationDuration: 15 // Default consultation duration
+    };
+    doctors.push(newDoctor);
+
+    const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
+
+    const newSchedule = {
+        id: ++last_schedule_id,
+        doctorId: newDoctor.id,
+        clinicId: receptionist.clinicId,
+        startTime,
+        endTime,
+        days: scheduleDays
+    };
+    doctorSchedules.push(newSchedule);
+    
+    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
 });
 
 

@@ -20,15 +20,15 @@
             </p>
         </div>
 
-        <!-- Current Patient Info -->
+        <!-- Current & Next Patient Info -->
         <% 
-        const currentPatient = appointments.find(app => app.queueNumber === (queue.currentNumber + 1));
-        const nextPatient = appointments.find(app => app.queueNumber === (queue.currentNumber + 2));
+        const currentPatient = appointments.find(app => app.queueNumber === queue.currentNumber);
+        const nextPatient = appointments.find(app => app.queueNumber === (queue.currentNumber + 1));
         %>
         
         <% if (currentPatient) { %>
             <div style="background: #f0f9ff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #0ea5e9; margin-bottom: 1rem;">
-                <h4 style="color: #0ea5e9; margin-bottom: 0.5rem;">Next Patient</h4>
+                <h4 style="color: #0ea5e9; margin-bottom: 0.5rem;">Current Patient</h4>
                 <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">
                     <%= currentPatient.patientName %> (Queue #<%= currentPatient.queueNumber %>)
                 </p>
@@ -61,7 +61,7 @@
 
         <!-- Queue Progress Bar -->
         <div style="background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
-            <div style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: <%= queue.totalPatients > 0 ? (queue.currentNumber / queue.totalPatients) * 100 : 0 %>%; transition: width 0.3s ease;"></div>
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: <%= queue.totalPatients > 0 ? ((queue.currentNumber / queue.totalPatients) * 100).toFixed(2) : 0 %>%; transition: width 0.3s ease;"></div>
         </div>
         <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin: 0;">
             Progress: <%= queue.currentNumber %> of <%= queue.totalPatients %> patients completed
@@ -71,17 +71,27 @@
     
     <!-- Appointments List -->
     <div class="card">
-        <h3>Today's Appointments Queue</h3>
+        <h3>
+            Today's Appointments Queue
+            <% 
+            if (selectedClinicId) {
+                const selectedSchedule = schedules.find(s => s.clinicId == selectedClinicId);
+                if (selectedSchedule) { %>
+                    <span style="color: #64748b; font-weight: 500;">at <%= selectedSchedule.clinic.name %></span>
+                <% }
+            } 
+            %>
+        </h3>
         <% if(appointments.length > 0) { %>
             <div style="max-height: 500px; overflow-y: auto;">
                 <% appointments.forEach(app => { %>
                     <div class="appointment-item"
-                         style = "<%= app.queueNumber <= queue.currentNumber ? 'background: #dcfce7; border-left: 4px solid #22c55e;' : app.queueNumber === (queue.currentNumber + 1) ? 'background: #dbeafe; border-left: 4px solid #3b82f6;' : '' %>">
+                         style = "<%= app.queueNumber < queue.currentNumber ? 'background: #dcfce7; border-left: 4px solid #22c55e;' : app.queueNumber === queue.currentNumber ? 'background: #dbeafe; border-left: 4px solid #3b82f6;' : '' %>">
                         
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div style="flex: 1;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                    <span style="background: <%= app.queueNumber <= queue.currentNumber ? '#22c55e' : app.queueNumber === (queue.currentNumber + 1) ? '#3b82f6' : '#64748b' %>; 
+                                    <span style="background: <%= app.queueNumber < queue.currentNumber ? '#22c55e' : app.queueNumber === queue.currentNumber ? '#3b82f6' : '#64748b' %>; 
                                                  color: white; 
                                                  padding: 0.25rem 0.75rem; 
                                                  border-radius: 20px; 
@@ -90,9 +100,9 @@
                                         #<%= app.queueNumber %>
                                     </span>
                                     <strong style="font-size: 1.1rem;"><%= app.patientName %></strong>
-                                    <% if (app.queueNumber <= queue.currentNumber) { %>
+                                    <% if (app.queueNumber < queue.currentNumber) { %>
                                         <span style="color: #22c55e; font-size: 0.9rem;">✅ Done</span>
-                                    <% } else if (app.queueNumber === (queue.currentNumber + 1)) { %>
+                                    <% } else if (app.queueNumber === queue.currentNumber) { %>
                                         <span style="color: #3b82f6; font-size: 0.9rem; font-weight: bold;">👆 Current</span>
                                     <% } %>
                                 </div>
@@ -133,15 +143,32 @@
     <div class="card">
         <h3>Your Schedule & Settings</h3>
         
-        <!-- Schedule Info -->
+        <!-- Clinics Filter -->
         <div style="margin-bottom: 2rem;">
-            <h4 style="color: #374151; margin-bottom: 1rem;">Today's Schedule</h4>
+            <h4 style="color: #374151; margin-bottom: 1rem;">Your Clinics (Click to filter list)</h4>
             <ul class="appointment-list">
+                <!-- All Clinics -->
+                <a href="/dashboard/doctor?userId=<%= doctor.id %>" style="text-decoration: none;">
+                    <li class="appointment-item" style="<%= !selectedClinicId ? 'background-color: #e0e7ff;' : '' %>">
+                        <strong>All Clinics Today</strong>
+                    </li>
+                </a>
+
                 <% schedules.forEach(schedule => { %>
-                    <li class="appointment-item">
-                        <strong><%= schedule.clinic.name %></strong><br>
-                        <%= schedule.startTime %> - <%= schedule.endTime %><br>
-                        <small><%= schedule.days %></small>
+                    <li class="appointment-item" style="<%= (selectedClinicId == schedule.clinicId) ? 'background-color: #e0e7ff;' : '' %>">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <a href="/dashboard/doctor?userId=<%= doctor.id %>&clinicId=<%= schedule.clinicId %>" style="flex-grow: 1; text-decoration: none; color: inherit;">
+                                <strong><%= schedule.clinic.name %></strong><br>
+                                <%= schedule.startTime %> - <%= schedule.endTime %><br>
+                                <small><%= schedule.days %></small>
+                            </a>
+                            <!-- Delete Schedule -->
+                            <form action="/doctor/delete-schedule" method="POST" onsubmit="return confirm('Apni ki ei clinic theke apnar schedule-ti muche felte nishchit?');" style="margin-left: 1rem;">
+                                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                                <input type="hidden" name="scheduleId" value="<%= schedule.id %>">
+                                <button type="submit" class="btn btn-danger btn-small" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Delete</button>
+                            </form>
+                        </div>
                     </li>
                 <% }) %>
             </ul>
@@ -199,22 +226,24 @@
     </div>
 </div>
 
-<!-- Auto-refresh for live updates -->
+ <!-- Auto-refresh for live updates -->
 <script>
     // Auto-refresh every 30 seconds to keep queue status updated
     setInterval(() => {
-        // Only refresh if the page is visible (not in background tab)
         if (document.visibilityState === 'visible') {
             window.location.reload();
         }
     }, 30000);
 
-    // Show confirmation for next patient button
-    document.querySelector('form[action="/doctor/next-patient"]').addEventListener('submit', function(e) {
-        if (!confirm(`Apni ki poroborti patient-ke deke nite nishchit?`)) {
-            e.preventDefault();
-        }
-    });
+    // Confirmation for next patient button
+    const nextForm = document.querySelector('form[action="/doctor/next-patient"]');
+    if (nextForm) {
+        nextForm.addEventListener('submit', function(e) {
+            if (!confirm(`Apni ki poroborti patient-ke deke nite nishchit?`)) {
+                e.preventDefault();
+            }
+        });
+    }
 </script>
 
 <%- include('partials/footer.ejs') %>
