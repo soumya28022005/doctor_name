@@ -22,27 +22,27 @@
 
         <!-- Current & Next Patient Info -->
         <% 
-        const currentPatient = appointments.find(app => app.queueNumber === queue.currentNumber);
-        const nextPatient = appointments.find(app => app.queueNumber === (queue.currentNumber + 1));
+        const currentPatientInfo = appointments.find(app => app.queueNumber === queue.currentNumber);
+        const nextPatientInfo = appointments.find(app => app.queueNumber === (queue.currentNumber + 1));
         %>
         
-        <% if (currentPatient) { %>
+        <% if (currentPatientInfo) { %>
             <div style="background: #f0f9ff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #0ea5e9; margin-bottom: 1rem;">
                 <h4 style="color: #0ea5e9; margin-bottom: 0.5rem;">Current Patient</h4>
                 <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">
-                    <%= currentPatient.patientName %> (Queue #<%= currentPatient.queueNumber %>)
+                    <%= currentPatientInfo.patientName %> (Queue #<%= currentPatientInfo.queueNumber %>)
                 </p>
                 <p style="margin: 0.5rem 0 0 0; color: #64748b;">
-                    Scheduled: <%= currentPatient.time %> | Status: <%= currentPatient.status %>
+                    Scheduled: <%= currentPatientInfo.time %> | Status: <%= currentPatientInfo.status %>
                 </p>
             </div>
         <% } %>
 
-        <% if (nextPatient) { %>
+        <% if (nextPatientInfo) { %>
             <div style="background: #fefce8; padding: 1rem; border-radius: 8px; border-left: 4px solid #eab308; margin-bottom: 1.5rem;">
                 <h5 style="color: #eab308; margin-bottom: 0.5rem;">Up Next</h5>
                 <p style="margin: 0;">
-                    <%= nextPatient.patientName %> (Queue #<%= nextPatient.queueNumber %>)
+                    <%= nextPatientInfo.patientName %> (Queue #<%= nextPatientInfo.queueNumber %>)
                 </p>
             </div>
         <% } %>
@@ -139,6 +139,78 @@
         <% } %>
     </div>
 
+    <!-- NEW: Add/Join Clinic Card -->
+    <div class="card">
+        <h3>Add a New Clinic</h3>
+        <form action="/doctor/add-clinic" method="POST" id="clinicForm">
+            <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+            
+            <div class="form-group" style="display: flex; gap: 20px;">
+                <label style="font-weight: normal;"><input type="radio" name="action" value="join" checked onchange="toggleClinicForm()"> Join an Existing Clinic</label>
+                <label style="font-weight: normal;"><input type="radio" name="action" value="create" onchange="toggleClinicForm()"> Create New Private Clinic</label>
+            </div>
+
+            <div id="joinClinicSection">
+                <div class="form-group">
+                    <label for="clinicId">Select Clinic</label>
+                    <select id="clinicId" name="clinicId" required>
+                        <option value="">-- Please select a clinic --</option>
+                        <% clinics.forEach(c => { %>
+                            <% if (!schedules.some(s => s.clinicId === c.id)) { %>
+                                <option value="<%= c.id %>"><%= c.name %> - <%= c.address %></option>
+                            <% } %>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+
+            <div id="createClinicSection" style="display: none;">
+                <div class="form-group">
+                    <label for="address">New Clinic Address</label>
+                    <input type="text" id="address" name="address" placeholder="e.g., 789 Lake Road, Durgapur">
+                </div>
+            </div>
+            
+            <hr style="margin: 1.5rem 0;">
+            <h4>Set Your Schedule for this Clinic</h4>
+            <div class="form-group">
+                <label for="startTime">Start Time</label>
+                <input type="time" name="startTime" required>
+            </div>
+            <div class="form-group">
+                <label for="endTime">End Time</label>
+                <input type="time" name="endTime" required>
+            </div>
+            
+            <div class="form-group">
+                <p><strong>Select Weekly Schedule:</strong></p>
+                <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 5px;">
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Sunday"> Sunday</label>
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Monday"> Monday</label>
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Tuesday"> Tuesday</label>
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Wednesday"> Wednesday</label>
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Thursday"> Thursday</label>
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Friday"> Friday</label>
+                    <label><input type="checkbox" class="day-checkbox-add" name="days" value="Saturday"> Saturday</label>
+                </div>
+                 <div style="margin-top: 10px;">
+                    <label style="font-weight: bold; color: #007bff;">
+                        <input type="checkbox" id="select-all-days-add"> Every Day
+                    </label>
+                </div>
+            </div>
+
+            <p style="text-align: center; font-weight: bold; margin: 1rem 0;">OR</p>
+
+            <div class="form-group">
+                <label for="customSchedule"><strong>Enter Custom Schedule Rule:</strong></label>
+                <input type="text" id="customSchedule" name="customSchedule" class="form-control" placeholder="e.g., 1st week of month">
+            </div>
+            
+            <button type="submit" class="btn btn-full">Submit Request</button>
+        </form>
+    </div>
+
     <!-- Doctor Settings -->
     <div class="card">
         <h3>Your Schedule & Settings</h3>
@@ -173,6 +245,26 @@
                 <% }) %>
             </ul>
         </div>
+        
+        <!-- Pending Clinic Requests -->
+        <% if(doctorRequests && doctorRequests.length > 0) { %>
+            <div style="margin-bottom: 2rem;">
+                <h4 style="color: #f59e0b;">Pending Clinic Requests</h4>
+                <ul class="appointment-list">
+                    <% doctorRequests.forEach(req => { %>
+                        <% const requestedClinic = clinics.find(c => c.id === req.clinicId); %>
+                        <% if (requestedClinic) { %>
+                             <li class="appointment-item" style="background: #fefce8; border-left-color: #f59e0b;">
+                                Request to join <strong><%= requestedClinic.name %></strong>
+                                <br>
+                                <small>Status: <%= req.status %></small>
+                            </li>
+                        <% } %>
+                    <% }) %>
+                </ul>
+            </div>
+        <% } %>
+
 
         <!-- Settings Forms -->
         <div  class="settings-grid">
@@ -226,20 +318,50 @@
     </div>
 </div>
 
- <!-- Auto-refresh for live updates -->
+ <!-- Scripts -->
 <script>
-    
+    function toggleClinicForm() {
+        const action = document.querySelector('input[name="action"]:checked').value;
+        const joinSection = document.getElementById('joinClinicSection');
+        const createSection = document.getElementById('createClinicSection');
+        const clinicIdSelect = document.getElementById('clinicId');
+        const addressInput = document.getElementById('address');
+        const submitButton = document.querySelector('#clinicForm button[type="submit"]');
+
+        if (action === 'join') {
+            joinSection.style.display = 'block';
+            createSection.style.display = 'none';
+            clinicIdSelect.required = true;
+            addressInput.required = false;
+            submitButton.textContent = 'Send Join Request';
+        } else {
+            joinSection.style.display = 'none';
+            createSection.style.display = 'block';
+            clinicIdSelect.required = false;
+            addressInput.required = true;
+            submitButton.textContent = 'Create Private Clinic';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', toggleClinicForm);
+
+    document.getElementById('select-all-days-add').addEventListener('change', function(event) {
+        const isChecked = event.target.checked;
+        const dayCheckboxes = document.querySelectorAll('.day-checkbox-add');
+        dayCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+    });
+
     setInterval(() => {
         if (document.visibilityState === 'visible') {
             window.location.reload();
         }
     }, 30000);
 
-    // Confirmation for next patient button
     const nextForm = document.querySelector('form[action="/doctor/next-patient"]');
-    if (nextForm) {n
+    if (nextForm) {
         nextForm.addEventListener('submit', function(e) {
-            if (!confirm(` Warning! Do you want to delete all appointments for today? This action cannot be undone.`)) {
+            if (!confirm(`Are you sure the consultation with the current patient is finished?`)) {
                 e.preventDefault();
             }
         });

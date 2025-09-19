@@ -55,6 +55,9 @@ let appointments = [
     }
 ];
 
+// --- NEW: Data store for clinic join requests ---
+let clinicJoinRequests = [];
+
 // --- Live Queue Tracking ---
 let doctorQueueStatus = {
     // Example: "1": { currentNumber: 0, totalPatients: 5, date: "2025-09-19" }
@@ -62,7 +65,7 @@ let doctorQueueStatus = {
 
 // --- ID Counters ---
 let last_patient_id = 1, last_doctors_id = 2, last_receptionists_id = 2, last_admins_id = 1;
-let last_appointment_id = 1, last_clinic_id = 2, last_schedule_id = 3;
+let last_appointment_id = 1, last_clinic_id = 2, last_schedule_id = 3, last_request_id = 0;
 
 // --- Helper Functions ---
 function timeToMinutes(time) {
@@ -196,6 +199,9 @@ app.get("/dashboard/doctor", (req, res) => {
         ...s, clinic: clinics.find(c => c.id === s.clinicId)
     }));
 
+    // Find pending requests for this doctor
+    const doctorRequests = clinicJoinRequests.filter(req => req.doctorId == userId);
+
     res.render("doctor-dashboard.ejs", { 
         doctor, 
         appointments: displayAppointments, // The filtered list is being sent
@@ -203,7 +209,9 @@ app.get("/dashboard/doctor", (req, res) => {
         queue,
         currentPatient, 
         nextPatient,
-        selectedClinicId: clinicId // Which clinic is selected is being sent
+        selectedClinicId: clinicId, // Which clinic is selected is being sent
+        clinics, // Send all clinics for the "add clinic" form
+        doctorRequests // Send pending requests
     });
 });
 
@@ -229,12 +237,16 @@ app.get("/dashboard/receptionist", (req, res) => {
                 }
             };
         });
+    
+    // Find pending join requests for this clinic
+    const requests = clinicJoinRequests.filter(req => req.clinicId === receptionist.clinicId && req.status === 'pending');
 
     res.render("receptionist-dashboard.ejs", { 
         receptionist, 
         clinic, 
         appointments: clinicAppointments, 
-        doctors: clinicDoctors 
+        doctors: clinicDoctors,
+        joinRequests: requests // Pass requests to the view
     });
 });
 
@@ -339,7 +351,6 @@ app.post("/doctor/set-limit", (req, res) => {
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
-// --- New Route: For deleting a doctor's clinic schedule ---
 app.post("/doctor/delete-schedule", (req, res) => {
     const { doctorId, scheduleId } = req.body;
     
@@ -352,8 +363,6 @@ app.post("/doctor/delete-schedule", (req, res) => {
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
-
-// --- NEW ROUTE: Clear Today's Appointments ---
 app.post("/doctor/clear-list", (req, res) => {
     const { doctorId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
@@ -372,6 +381,50 @@ app.post("/doctor/clear-list", (req, res) => {
         };
     }
 
+    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+});
+
+// --- NEW Route: For doctor to add/join a clinic ---
+app.post("/doctor/add-clinic", (req, res) => {
+    const { doctorId, action, clinicId, address, startTime, endTime, days, customSchedule } = req.body;
+    const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
+
+    if (action === 'join') {
+        const existingRequest = clinicJoinRequests.find(r => r.doctorId == doctorId && r.clinicId == clinicId && r.status === 'pending');
+        if (existingRequest) {
+            return res.redirect(`/dashboard/doctor?userId=${doctorId}`); // Already a pending request
+        }
+        const doctor = doctors.find(d => d.id == doctorId);
+        const newRequest = {
+            id: ++last_request_id,
+            doctorId: parseInt(doctorId),
+            doctorName: doctor.name,
+            doctorSpecialty: doctor.specialty,
+            clinicId: parseInt(clinicId),
+            schedule: { startTime, endTime, days: scheduleDays },
+            status: 'pending'
+        };
+        clinicJoinRequests.push(newRequest);
+    } else if (action === 'create') {
+        const doctor = doctors.find(d => d.id == doctorId);
+        const newClinic = {
+            id: ++last_clinic_id,
+            name: `${doctor.name}'s Private Clinic`,
+            address: address,
+            phone: "N/A"
+        };
+        clinics.push(newClinic);
+
+        const newSchedule = {
+            id: ++last_schedule_id,
+            doctorId: parseInt(doctorId),
+            clinicId: newClinic.id,
+            startTime,
+            endTime,
+            days: scheduleDays
+        };
+        doctorSchedules.push(newSchedule);
+    }
     res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
@@ -418,6 +471,34 @@ app.post("/receptionist/delete-doctor", (req, res) => {
     
     // Remove any schedules associated with this doctor
     doctorSchedules = doctorSchedules.filter(s => s.doctorId != doctorId);
+    
+    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+});
+
+// --- NEW Route: For receptionist to handle join requests ---
+app.post("/receptionist/handle-join-request", (req, res) => {
+    const { requestId, action, receptionistId } = req.body;
+    const requestIndex = clinicJoinRequests.findIndex(r => r.id == requestId);
+
+    if (requestIndex === -1) {
+        return res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+    }
+
+    if (action === 'accept') {
+        const request = clinicJoinRequests[requestIndex];
+        const newSchedule = {
+            id: ++last_schedule_id,
+            doctorId: request.doctorId,
+            clinicId: request.clinicId,
+            startTime: request.schedule.startTime,
+            endTime: request.schedule.endTime,
+            days: request.schedule.days
+        };
+        doctorSchedules.push(newSchedule);
+    }
+
+    // Remove request whether it's accepted or deleted
+    clinicJoinRequests.splice(requestIndex, 1);
     
     res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
 });
@@ -977,4 +1058,3 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
-

@@ -6,6 +6,40 @@
 </div>
 
 <div class="dashboard-grid">
+    <!-- Doctor Join Requests Card -->
+    <% if (joinRequests && joinRequests.length > 0) { %>
+    <div class="card" style="background: #fffbeb; border-left: 4px solid #f59e0b;">
+        <h3>Doctor Join Requests (<%= joinRequests.length %>)</h3>
+        <ul class="appointment-list">
+            <% joinRequests.forEach(req => { %>
+                <li class="appointment-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+                        <div style="flex-grow: 1;">
+                            <strong>Dr. <%= req.doctorName %></strong> (<%= req.doctorSpecialty %>) wants to join.<br>
+                            <small>Proposed Schedule: <%= req.schedule.startTime %> - <%= req.schedule.endTime %> on <%= req.schedule.days %></small>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
+                            <form action="/receptionist/handle-join-request" method="POST">
+                                <input type="hidden" name="requestId" value="<%= req.id %>">
+                                <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
+                                <input type="hidden" name="action" value="accept">
+                                <button type="submit" class="btn btn-success btn-small">Accept</button>
+                            </form>
+                            <form action="/receptionist/handle-join-request" method="POST" onsubmit="return confirm('Are you sure you want to delete this request?');">
+                                <input type="hidden" name="requestId" value="<%= req.id %>">
+                                <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
+                                <input type="hidden" name="action" value="delete">
+                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </li>
+            <% }) %>
+        </ul>
+    </div>
+    <% } %>
+
+
     <div class="card">
         <h3>Add New Doctor to <%= clinic.name %></h3>
         <form action="/receptionist/add-doctor" method="POST">
