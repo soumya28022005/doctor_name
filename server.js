@@ -14,7 +14,7 @@ let patients = [
     { id: 1, name: "Soumya Chatterjee", dob: "2005-02-28", mobile: "1234567890", username: "soumya", password: "12345678" }
 ];
 
-let clinics = [
+let clinics = [ 
     { id: 1, name: "Ravi Clinic", address: "123 Main Street, Durgapur", phone: "9876543210" },
     { id: 2, name: "Deepak Clinic", address: "456 Park Avenue, Durgapur", phone: "9876543211" }
 ];
@@ -694,19 +694,6 @@ app.post("/receptionist/add-appointment", (req, res) => {
     if (!doctorId || !clinicId || !patientName || !patientAge) {
         return res.status(400).send("Patient name and age are required.");
     }
-    
-    // --- FIX: Create a new patient record for the walk-in ---
-    const newPatient = {
-        id: ++last_patient_id,
-        name: patientName,
-        dob: `N/A (Age: ${patientAge})`, // Storing age since DOB is not provided
-        mobile: "N/A", // Not provided in walk-in form
-        username: `walkin_${patientName.toLowerCase().replace(/\s/g, '')}_${last_patient_id}`, // Generate a unique username
-        password: "password" // Default password
-    };
-    patients.push(newPatient);
-    // --- END FIX ---
-
 
     const doctor = doctors.find(d => d.id == doctorId);
     const clinic = clinics.find(c => c.id == clinicId);
@@ -721,33 +708,6 @@ app.post("/receptionist/add-appointment", (req, res) => {
         const start = new Date(`${date}T${schedule.startTime}`);
         start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
         approxTime = start.toTimeString().slice(0,5);
-    }
-    
-    // Using the same conflict and limit checks as other appointment creations
-    const newAppStartTime = timeToMinutes(approxTime);
-    const newAppEndTime = newAppStartTime + doctor.consultationDuration;
-
-    const conflictingAppointment = appointments.find(app => {
-        if (app.patientId !== newPatient.id || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
-            return false;
-        }
-        const existingDoctor = doctors.find(d => d.id === app.doctorId);
-        const existingAppStartTime = timeToMinutes(app.time);
-        const existingAppEndTime = existingAppStartTime + existingDoctor.consultationDuration;
-
-        return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
-    });
-
-    if (conflictingAppointment) {
-        const conflictingDoctor = doctors.find(d => d.id === conflictingAppointment.doctorId);
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">This patient, <strong>${patientName}</strong>, already has a conflicting appointment with <strong>Dr. ${conflictingDoctor.name}</strong> at <strong>${conflictingAppointment.time}</strong>.</p>
-                <p style="margin-top: 0.5rem;">You cannot book another appointment during this time slot.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
-            </div>
-        `);
     }
 
     // --- Daily Limit Check ---
@@ -765,8 +725,8 @@ app.post("/receptionist/add-appointment", (req, res) => {
 
     const newAppointment = {
         id: ++last_appointment_id,
-        patientId: newPatient.id, // Use the new patient's ID
-        patientName: newPatient.name, // Use the clean name from the new patient object
+        patientId: null, // No patient account is created for walk-ins
+        patientName: `${patientName} (Age: ${patientAge})`,
         doctorId: parseInt(doctorId),
         doctorName: doctor.name,
         clinicId: parseInt(clinicId),
@@ -1017,3 +977,4 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
+

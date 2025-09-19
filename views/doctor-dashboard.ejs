@@ -237,7 +237,7 @@
 
     // Confirmation for next patient button
     const nextForm = document.querySelector('form[action="/doctor/next-patient"]');
-    if (nextForm) {
+    if (nextForm) {n
         nextForm.addEventListener('submit', function(e) {
             if (!confirm(` Warning! Do you want to delete all appointments for today? This action cannot be undone.`)) {
                 e.preventDefault();
