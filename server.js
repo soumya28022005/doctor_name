@@ -20,11 +20,11 @@ let clinics = [
 ];
 
 let doctors = [
-    { id: 1, name: " Priya Verma", specialty: "Cardiologist", username: "priya", password: "1234", dailyLimit: 25, consultationDuration: 15},
-    { id: 2, name: " Biswajit Kumar", specialty: "General Medicine", username: "biswajit", password: "biswa123", dailyLimit: 20 , consultationDuration: 10}
+    { id: 1, name: " Priya Verma", specialty: "Cardiologist", username: "priya", password: "1234", dailyLimit: 25,phone: "1234567890" , consultationDuration: 15},
+    { id: 2, name: " Biswajit Kumar", specialty: "General Medicine", username: "biswajit", password: "biswa123", dailyLimit: 20 ,phone: "1234567890" , consultationDuration: 10}
 ];
 
-let doctorSchedules = [
+let doctorSchedules = [ 
     { id: 1, doctorId: 1, clinicId: 1, startTime: "09:00", endTime: "17:00", days: "Monday, Tuesday, Wednesday" },
     { id: 2, doctorId: 2, clinicId: 1, startTime: "10:00", endTime: "12:00", days: "Monday, Wednesday, Friday" },
     { id: 3, doctorId: 2, clinicId: 2, startTime: "13:00", endTime: "15:00", days: "Monday, Wednesday, Friday" }

@@ -11,7 +11,7 @@
                 <li class="appointment-item">
                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <strong><%= c.name %></strong> - <%= c.address %><br>
+                            <strong><%= c.name %></strong> - <%= c.address %><br><strong>Phone:</strong> <%= c.phone %><br>
                             <% const receptionist = receptionists.find(r => r.clinicId === c.id); %>
                             <% if (receptionist) { %>
                                 <small>Receptionist: <%= receptionist.name %> | User: <%= receptionist.username %> | Pass: <%= receptionist.password %></small>
@@ -51,7 +51,7 @@
                 <li class="appointment-item">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <strong><%= d.name %></strong> - <%= d.specialty %><br>
+                            <strong><%= d.name %></strong> - <%= d.specialty %><br><strong>Phone:</strong> <%= d.phone %><br>
                             <small>User: <%= d.username %> | Pass: <%= d.password %></small>
                         </div>
                         <form action="/admin/delete-doctor" method="POST" style="display:inline;">
@@ -113,7 +113,7 @@
                 <li class="appointment-item">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <strong><%= p.name %></strong><br>
+                            <strong><%= p.name %></strong><br><strong>Phone:</strong> <%= p.phone %><br>
                             <small>User: <%= p.username %> | Pass: <%= p.password %></small>
                         </div>
                         <form action="/admin/delete-patient" method="POST" style="display:inline;">
