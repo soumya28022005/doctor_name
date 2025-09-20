@@ -344,6 +344,38 @@
     </div>
 </div>
 
+<% if(invitations && invitations.length > 0) { %>
+    <div class="card">
+        <h3>Clinic Invitations</h3>
+        <ul class="appointment-list">
+            <% invitations.forEach(inv => { %>
+                <li class="appointment-item" style="background: #fffbeb; border-left: 4px solid #f59e0b;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong><%= inv.clinicName %></strong> has invited you to join.<br>
+                            <small>Proposed Schedule: <%= inv.schedule.startTime %> - <%= inv.schedule.endTime %> on <%= inv.schedule.days %></small>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <form action="/doctor/handle-invitation" method="POST">
+                                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                                <input type="hidden" name="invitationId" value="<%= inv.id %>">
+                                <input type="hidden" name="action" value="accept">
+                                <button type="submit" class="btn btn-success btn-small">Accept</button>
+                            </form>
+                            <form action="/doctor/handle-invitation" method="POST">
+                                <input type="hidden" name="doctorId" value="<%= doctor.id %>">
+                                <input type="hidden" name="invitationId" value="<%= inv.id %>">
+                                <input type="hidden" name="action" value="delete">
+                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </li>
+            <% }) %>
+        </ul>
+    </div>
+<% } %>
+
  <script>
     function toggleClinicForm() {
         const action = document.querySelector('input[name="action"]:checked').value;

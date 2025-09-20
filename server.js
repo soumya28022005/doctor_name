@@ -63,6 +63,10 @@ let doctorQueueStatus = {
     // Example: "1_1": { currentNumber: 0, totalPatients: 5, date: "2025-09-19" }
 };
 
+// Add this new array near your other data storage arrays
+let receptionistInvitations = [];
+
+
 // --- ID Counters ---
 let last_patient_id = 1, last_doctors_id = 2, last_receptionists_id = 2, last_admins_id = 1;
 let last_appointment_id = 1, last_clinic_id = 2, last_schedule_id = 3, last_request_id = 0;
@@ -173,12 +177,10 @@ app.get("/dashboard/doctor", (req, res) => {
         .filter(app => app.doctorId == userId && app.date === today)
         .sort((a, b) => a.queueNumber - b.queueNumber);
 
-    // This is the list that will be displayed and used for all calculations on the page.
     const appointmentsToConsider = clinicId
         ? allTodayAppointments.filter(app => app.clinicId == clinicId)
         : allTodayAppointments;
 
-    // --- All calculations are now based *only* on the list being viewed ---
     const doneAppointmentsInView = appointmentsToConsider.filter(app => app.status === 'Done');
     const isClinicQueueCompleted = doneAppointmentsInView.length >= appointmentsToConsider.length;
 
@@ -193,7 +195,6 @@ app.get("/dashboard/doctor", (req, res) => {
         total: appointmentsToConsider.length
     };
     
-    // This is purely for visual styling of the list items
     const overallDone = allTodayAppointments.filter(app => app.status === 'Done');
     const queue = {
         currentNumber: overallDone.length > 0 ? Math.max(...overallDone.map(a => a.queueNumber)) : 0
@@ -203,6 +204,9 @@ app.get("/dashboard/doctor", (req, res) => {
         ...s, clinic: clinics.find(c => c.id === s.clinicId)
     }));
     const doctorRequests = clinicJoinRequests.filter(req => req.doctorId == userId);
+    
+    // Fetch invitations for the doctor
+    const invitations = receptionistInvitations.filter(inv => inv.doctorId == userId);
 
     res.render("doctor-dashboard.ejs", {
         doctor,
@@ -215,7 +219,8 @@ app.get("/dashboard/doctor", (req, res) => {
         nextPatientInfo,
         selectedClinicId: clinicId,
         clinics,
-        doctorRequests
+        doctorRequests,
+        invitations // Pass invitations to the view
     });
 });
 app.get("/dashboard/receptionist", (req, res) => {
@@ -226,7 +231,6 @@ app.get("/dashboard/receptionist", (req, res) => {
     const clinic = clinics.find(c => c.id === receptionist.clinicId);
     const clinicAppointments = appointments.filter(a => a.clinicId === receptionist.clinicId);
 
-    // --- Merge doctors with their schedule for this clinic ---
     const clinicDoctors = doctorSchedules
         .filter(s => s.clinicId === clinic.id)
         .map(s => {
@@ -241,8 +245,10 @@ app.get("/dashboard/receptionist", (req, res) => {
             };
         });
     
-    // Find pending join requests for this clinic
     const requests = clinicJoinRequests.filter(req => req.clinicId === receptionist.clinicId && req.status === 'pending');
+    
+    // Get invitations sent by THIS receptionist
+    const invitations = receptionistInvitations.filter(inv => inv.receptionistId == userId);
 
     res.render("receptionist-dashboard.ejs", { 
         receptionist, 
@@ -250,7 +256,8 @@ app.get("/dashboard/receptionist", (req, res) => {
         appointments: clinicAppointments, 
         doctors: clinicDoctors,
         allDoctors: doctors,
-        joinRequests: requests // Pass requests to the view
+        joinRequests: requests,
+        invitations // Pass invitations to the view
     });
 });
 
@@ -482,20 +489,48 @@ app.post("/receptionist/invite-doctor", (req, res) => {
         return res.status(404).send("Doctor not found.");
     }
 
+    const clinic = clinics.find(c => c.id === receptionist.clinicId);
+    if (!clinic) {
+        return res.status(404).send("Clinic not found.");
+    }
+
     const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
 
-    const newRequest = {
-        id: ++last_request_id,
+    const newInvitation = {
+        id: ++last_request_id, // Using the same ID counter for simplicity
         doctorId: parseInt(doctorId),
-        doctorName: doctor.name,
-        doctorSpecialty: doctor.specialty,
+        receptionistId: parseInt(receptionistId),
         clinicId: receptionist.clinicId,
+        clinicName: clinic.name,
         schedule: { startTime, endTime, days: scheduleDays },
         status: 'pending'
     };
-    clinicJoinRequests.push(newRequest);
+    receptionistInvitations.push(newInvitation);
     
     res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+});
+
+app.post("/doctor/handle-invitation", (req, res) => {
+    const { doctorId, invitationId, action } = req.body;
+    const invitationIndex = receptionistInvitations.findIndex(inv => inv.id == invitationId);
+
+    if (invitationIndex !== -1) {
+        if (action === 'accept') {
+            const invitation = receptionistInvitations[invitationIndex];
+            const newSchedule = {
+                id: ++last_schedule_id,
+                doctorId: invitation.doctorId,
+                clinicId: invitation.clinicId,
+                startTime: invitation.schedule.startTime,
+                endTime: invitation.schedule.endTime,
+                days: invitation.schedule.days
+            };
+            doctorSchedules.push(newSchedule);
+        }
+        receptionistInvitations.splice(invitationIndex, 1);
+    }
+
+    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
 app.post("/receptionist/delete-doctor", (req, res) => {
