@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import bodyParser from "body-parser";
 import pg from "pg";
@@ -11,12 +12,14 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.set("view engine", "ejs");
 
 // --- Database Connection ---
-const db = new pg.Pool({
+const isProduction = process.env.NODE_ENV === "production";
+
+const connectionConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
-});
+    ssl: isProduction ? { rejectUnauthorized: false } : false
+};
+
+const db = new pg.Pool(connectionConfig);
 db.connect();
 
 // --- Helper Functions ---
