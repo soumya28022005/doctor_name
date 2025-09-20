@@ -443,7 +443,7 @@ app.post("/doctor/add-clinic", (req, res) => {
 
 // --- Receptionist Actions ---
 app.post("/receptionist/add-doctor", (req, res) => {
-    const { receptionistId, name, specialty, username, password, startTime, endTime, days, customSchedule } = req.body;
+    const { receptionistId, name, specialty, username, password, startTime, endTime, days, customSchedule, Phonenumber } = req.body;
     
     const receptionist = receptionists.find(r => r.id == receptionistId);
     if (!receptionist) {
@@ -456,8 +456,9 @@ app.post("/receptionist/add-doctor", (req, res) => {
         specialty,
         username,
         password,
+        phone: Phonenumber, // This line is added to save the phone number
         dailyLimit: 20, // Default daily limit
-        consultationDuration: 15 // Default consultation duration
+        consultationDuration: 10 // Default consultation duration
     };
     doctors.push(newDoctor);
 
