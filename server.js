@@ -58,9 +58,9 @@ let appointments = [
 // --- NEW: Data store for clinic join requests ---
 let clinicJoinRequests = [];
 
-// --- Live Queue Tracking ---
+// --- Live Queue Tracking (Clinic-Specific) ---
 let doctorQueueStatus = {
-    // Example: "1": { currentNumber: 0, totalPatients: 5, date: "2025-09-19" }
+    // Example: "1_1": { currentNumber: 0, totalPatients: 5, date: "2025-09-19" }
 };
 
 // --- ID Counters ---
@@ -377,8 +377,9 @@ app.post("/doctor/clear-list", (req, res) => {
     );
 
     // Also reset the queue status for this doctor
-    if (doctorQueueStatus[doctorId]) {
-        doctorQueueStatus[doctorId] = { 
+    const queueKey = `${doctorId}_${clinicId}`;
+    if (doctorQueueStatus[queueKey]) {
+        doctorQueueStatus[queueKey] = { 
             currentNumber: 0, 
             totalPatients: 0, 
             date: today 
@@ -733,10 +734,11 @@ app.get("/api/doctors", (req, res) => {
     res.json(results);
 });
 
-app.get("/api/queue-status/:doctorId", (req, res) => {
-    const { doctorId } = req.params;
+app.get("/api/queue-status/:doctorId/:clinicId", (req, res) => {
+    const { doctorId, clinicId } = req.params;
     const today = new Date().toISOString().slice(0, 10);
-    const queue = doctorQueueStatus[doctorId];
+    const queueKey = `${doctorId}_${clinicId}`;
+    const queue = doctorQueueStatus[queueKey];
     if (queue && queue.date === today) {
         res.json(queue);
     } else {
@@ -838,20 +840,15 @@ app.post("/receptionist/add-appointment", (req, res) => {
 });
 
 // --- UPDATED Doctor Queue Management Route ---
-// --- UPDATED Doctor Queue Management Route ---
 app.post("/doctor/next-patient", (req, res) => {
     const { doctorId, clinicId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
+    const queueKey = `${doctorId}_${clinicId}`;
 
     // IMPORTANT: This logic now focuses *only* on the relevant clinic from the start.
     let appointmentsToConsider = appointments.filter(app =>
-        app.doctorId == doctorId && app.date === today
+        app.doctorId == doctorId && app.date === today && app.clinicId == clinicId
     );
-
-    // If a clinic is specified, we ONLY work with that clinic's appointments.
-    if (clinicId) {
-        appointmentsToConsider = appointmentsToConsider.filter(app => app.clinicId == clinicId);
-    }
 
     // Find the next available patient within this specific, filtered list.
     const nextAvailablePatient = appointmentsToConsider
@@ -864,18 +861,18 @@ app.post("/doctor/next-patient", (req, res) => {
         if (appointmentToUpdate) {
             appointmentToUpdate.status = 'Done';
 
-            // *** START: NEW CODE TO UPDATE LIVE QUEUE STATUS ***
-            // Initialize or find the queue status for the doctor
-            if (!doctorQueueStatus[doctorId] || doctorQueueStatus[doctorId].date !== today) {
-                doctorQueueStatus[doctorId] = {
+            // *** START: NEW CODE TO UPDATE LIVE QUEUE STATUS (CLINIC-SPECIFIC) ***
+            // Initialize or find the queue status for the doctor and clinic
+            if (!doctorQueueStatus[queueKey] || doctorQueueStatus[queueKey].date !== today) {
+                doctorQueueStatus[queueKey] = {
                     date: today,
                     currentNumber: 0,
                     totalPatients: appointmentsToConsider.length
                 };
             }
             // Update the current number to the patient who just finished
-            doctorQueueStatus[doctorId].currentNumber = appointmentToUpdate.queueNumber;
-            // *** END: NEW CODE TO UPDATE LIVE QUEUE STATUS ***
+            doctorQueueStatus[queueKey].currentNumber = appointmentToUpdate.queueNumber;
+            // *** END: NEW CODE TO UPDATE LIVE QUEUE STATUS (CLINIC-SPECIFIC) ***
         }
     }
 
@@ -901,25 +898,31 @@ app.post("/doctor/reset-queue", (req, res) => {
             app.status = 'Confirmed';
         }
     });
+
+    const queueKey = `${doctorId}_${clinicId}`;
+    if (doctorQueueStatus[queueKey]) {
+        doctorQueueStatus[queueKey].currentNumber = 0;
+    }
     
     res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
 });
 
 // Enhanced API endpoint for real-time queue status
-app.get("/api/queue-status/:doctorId", (req, res) => {
-    const { doctorId } = req.params;
+app.get("/api/queue-status/:doctorId/:clinicId", (req, res) => {
+    const { doctorId, clinicId } = req.params;
     const today = new Date().toISOString().slice(0, 10);
     
-    // Get today's appointments for this doctor
+    // Get today's appointments for this doctor at the specific clinic
     const todayAppointments = appointments.filter(app => 
-        app.doctorId == doctorId && app.date === today
+        app.doctorId == doctorId && app.clinicId == clinicId && app.date === today
     ).sort((a, b) => a.queueNumber - b.queueNumber);
     
-    let queue = doctorQueueStatus[doctorId];
+    const queueKey = `${doctorId}_${clinicId}`;
+    let queue = doctorQueueStatus[queueKey];
     
     // Initialize if doesn't exist or different date
     if (!queue || queue.date !== today) {
-        queue = doctorQueueStatus[doctorId] = { 
+        queue = doctorQueueStatus[queueKey] = { 
             currentNumber: 0, 
             totalPatients: todayAppointments.length, 
             date: today 
@@ -983,15 +986,17 @@ app.get("/api/patient-queue-status/:patientId", (req, res) => {
     }
     
     const doctorId = patientAppointment.doctorId;
-    let queue = doctorQueueStatus[doctorId];
+    const clinicId = patientAppointment.clinicId;
+    const queueKey = `${doctorId}_${clinicId}`;
+    let queue = doctorQueueStatus[queueKey];
     
     // Initialize queue if it doesn't exist
     if (!queue || queue.date !== today) {
         const todayAppointments = appointments.filter(app => 
-            app.doctorId == doctorId && app.date === today
+            app.doctorId == doctorId && app.clinicId == clinicId && app.date === today
         );
         
-        queue = doctorQueueStatus[doctorId] = { 
+        queue = doctorQueueStatus[queueKey] = { 
             currentNumber: 0, 
             totalPatients: todayAppointments.length, 
             date: today 
@@ -1036,16 +1041,17 @@ app.get("/api/patient-queue-status/:patientId", (req, res) => {
 });
 
 // Additional helper API for queue overview
-app.get("/api/queue-overview/:doctorId", (req, res) => {
-    const { doctorId } = req.params;
+app.get("/api/queue-overview/:doctorId/:clinicId", (req, res) => {
+    const { doctorId, clinicId } = req.params;
     const { date } = req.query;
     const targetDate = date || new Date().toISOString().slice(0, 10);
     
     const doctorAppointments = appointments.filter(app => 
-        app.doctorId == doctorId && app.date === targetDate
+        app.doctorId == doctorId && app.clinicId == clinicId && app.date === targetDate
     ).sort((a, b) => a.queueNumber - b.queueNumber);
     
-    const queue = doctorQueueStatus[doctorId];
+    const queueKey = `${doctorId}_${clinicId}`;
+    const queue = doctorQueueStatus[queueKey];
     const currentNumber = (queue && queue.date === targetDate) ? queue.currentNumber : 0;
     
     const overview = doctorAppointments.map(app => ({
@@ -1066,9 +1072,6 @@ app.get("/api/queue-overview/:doctorId", (req, res) => {
         isQueueActive: currentNumber > 0 || doctorAppointments.length > 0
     });
 });
-
-
-
 
 // --- Server ---
 app.listen(port, () => {
