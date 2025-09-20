@@ -3,7 +3,7 @@ import bodyParser from "body-parser";
 import pg from "pg";
 
 const app = express();
-const port = 3000;
+ const port = process.env.PORT || 3000
 
 // --- Middleware ---
 app.use(express.static("public"));
@@ -12,11 +12,10 @@ app.set("view engine", "ejs");
 
 // --- Database Connection ---
 const db = new pg.Pool({
-    user: "postgres",       // Your PostgreSQL username
-    host: "localhost",
-    database: "clinic_db",  // The database you created
-    password: "Soumya2802@", // The password for your user
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 db.connect();
 
