@@ -249,6 +249,7 @@ app.get("/dashboard/receptionist", (req, res) => {
         clinic, 
         appointments: clinicAppointments, 
         doctors: clinicDoctors,
+        allDoctors: doctors,
         joinRequests: requests // Pass requests to the view
     });
 });
@@ -468,14 +469,49 @@ app.post("/receptionist/add-doctor", (req, res) => {
     res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
 });
 
+app.post("/receptionist/invite-doctor", (req, res) => {
+    const { receptionistId, doctorId, startTime, endTime, days, customSchedule } = req.body;
+    
+    const receptionist = receptionists.find(r => r.id == receptionistId);
+    if (!receptionist) {
+        return res.status(404).send("Receptionist not found.");
+    }
+    
+    const doctor = doctors.find(d => d.id == doctorId);
+    if (!doctor) {
+        return res.status(404).send("Doctor not found.");
+    }
+
+    const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
+
+    const newRequest = {
+        id: ++last_request_id,
+        doctorId: parseInt(doctorId),
+        doctorName: doctor.name,
+        doctorSpecialty: doctor.specialty,
+        clinicId: receptionist.clinicId,
+        schedule: { startTime, endTime, days: scheduleDays },
+        status: 'pending'
+    };
+    clinicJoinRequests.push(newRequest);
+    
+    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+});
+
 app.post("/receptionist/delete-doctor", (req, res) => {
     const { doctorId, receptionistId } = req.body;
     
-    // Remove the doctor from the main list
-    doctors = doctors.filter(d => d.id != doctorId);
-    
-    // Remove any schedules associated with this doctor
-    doctorSchedules = doctorSchedules.filter(s => s.doctorId != doctorId);
+    // Find the receptionist to identify the clinic
+    const receptionist = receptionists.find(r => r.id == receptionistId);
+    if (!receptionist) {
+        return res.status(404).send("Receptionist not found.");
+    }
+    const clinicId = receptionist.clinicId;
+
+    // Instead of deleting the doctor, just remove the schedule for this specific clinic
+    doctorSchedules = doctorSchedules.filter(s => 
+        !(s.doctorId == doctorId && s.clinicId == clinicId)
+    );
     
     res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
 });
