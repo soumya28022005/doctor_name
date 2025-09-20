@@ -10,121 +10,21 @@ app.use(express.static("public"));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set("view engine", "ejs");
 
-// --- In-Memory Data Storage ---
-let patients = [
-    { id: 1, name: "Soumya Chatterjee", dob: "2005-02-28", mobile: "1234567890", username: "soumya", password: "12345678" }
-];
-
-let clinics = [ 
-    { id: 1, name: "Ravi Clinic", address: "123 Main Street, Durgapur", phone: "9876543210" },
-    { id: 2, name: "Deepak Clinic", address: "456 Park Avenue, Durgapur", phone: "9876543211" }
-];
-
-let doctors = [
-    { id: 1, name: " Priya Verma", specialty: "Cardiologist", username: "priya", password: "1234", dailyLimit: 25,phone: "1234567890" , consultationDuration: 15},
-    { id: 2, name: " Biswajit Kumar", specialty: "General Medicine", username: "biswajit", password: "biswa123", dailyLimit: 20 ,phone: "1234567890" , consultationDuration: 10}
-];
-
-let doctorSchedules = [ 
-    { id: 1, doctorId: 1, clinicId: 1, startTime: "09:00", endTime: "17:00", days: "Monday, Tuesday, Wednesday" },
-    { id: 2, doctorId: 2, clinicId: 1, startTime: "10:00", endTime: "12:00", days: "Monday, Wednesday, Friday" },
-    { id: 3, doctorId: 2, clinicId: 2, startTime: "13:00", endTime: "15:00", days: "Monday, Wednesday, Friday" }
-];
-
-let receptionists = [
-    { id: 1, name: "Ravi Kumar", clinicId: 1, username: "ravi", password: "password123" },
-    { id: 2, name: "Deepak Singh", clinicId: 2, username: "deepak", password: "password123" }
-];
-
-let admins = [
-    { id: 1, name: "Admin User", username: "admin", password: "password123" }
-];
-
-let appointments = [
-    {
-        id: 1,
-        patientId: 1,
-        patientName: "Soumya Chatterjee",
-        doctorId: 1,
-        doctorName: "Dr. Priya Verma",
-        clinicId: 1,
-        clinicName: "Ravi Clinic",
-        date: new Date().toISOString().slice(0, 10),
-        time: "10:00",
-        status: "Confirmed",
-        queueNumber: 1
-    }
-];
-
-// --- NEW: Data store for clinic join requests ---
-let clinicJoinRequests = [];
-
-// --- Live Queue Tracking (Clinic-Specific) ---
-let doctorQueueStatus = {
-    // Example: "1_1": { currentNumber: 0, totalPatients: 5, date: "2025-09-19" }
-};
-
-// Add this new array near your other data storage arrays
-let receptionistInvitations = [];
-// connect data
+// --- Database Connection ---
 const db = new pg.Pool({
-    user: "postgres", // Your PostgreSQL username
+    user: "postgres",       // Your PostgreSQL username
     host: "localhost",
-    database: "clinic_db", // The database you created
+    database: "clinic_db",  // The database you created
     password: "Soumya2802@", // The password for your user
     port: 5432,
 });
 db.connect();
 
-
-// --- ID Counters ---
-let last_patient_id = 1, last_doctors_id = 2, last_receptionists_id = 2, last_admins_id = 1;
-let last_appointment_id = 1, last_clinic_id = 2, last_schedule_id = 3, last_request_id = 0;
-
 // --- Helper Functions ---
 function timeToMinutes(time) {
+    if (!time || typeof time !== 'string') return 0;
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
-}
-
-function calculateAge(dob) {
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-}
-
-function getNextQueueNumber(doctorId, date, clinicId) {
-    const todayAppointments = appointments.filter(app =>
-        app.doctorId == doctorId && app.date === date && app.clinicId == clinicId
-    );
-    return todayAppointments.length + 1;
-}
-
-function getAvailableSlots(doctorId, date, schedule) {
-    const slots = [];
-    const bookedTimes = appointments
-        .filter(app => app.doctorId == doctorId && app.date === date)
-        .map(app => app.time);
-
-    const { startTime, endTime } = schedule;
-    if (!startTime || !endTime) return [];
-
-    let currentTime = new Date(`${date}T${startTime}`);
-    const lastTime = new Date(`${date}T${endTime}`);
-
-    while (currentTime < lastTime) {
-        const timeString = currentTime.toTimeString().substring(0, 5);
-        if (!bookedTimes.includes(timeString)) {
-            slots.push(timeString);
-        }
-        currentTime.setMinutes(currentTime.getMinutes() + 30);
-    }
-    return slots;
 }
 
 // --- Routes ---
@@ -133,1031 +33,751 @@ app.get("/login/:role", (req, res) => { res.render("login.ejs", { role: req.para
 app.get("/signup/:role", (req, res) => { res.render("signup.ejs", { role: req.params.role, error: null }); });
 
 // --- Auth ---
-app.post("/login/:role", (req, res) => {
+app.post("/login/:role", async (req, res) => {
     const role = req.params.role;
     const { username, password } = req.body;
-    let userList;
+    let tableName;
     switch (role) {
-        case 'patient': userList = patients; break;
-        case 'doctor': userList = doctors; break;
-        case 'receptionist': userList = receptionists; break;
-        case 'admin': userList = admins; break;
+        case 'patient': tableName = 'patients'; break;
+        case 'doctor': tableName = 'doctors'; break;
+        case 'receptionist': tableName = 'receptionists'; break;
+        case 'admin': tableName = 'admins'; break;
         default: return res.status(400).send("Invalid role");
     }
-    const user = userList.find(u => u.username === username && u.password === password);
-    if (user) {
-        res.redirect(`/dashboard/${role}?userId=${user.id}`);
-    } else {
-        res.render("login.ejs", { role: role, error: "Invalid username or password." });
+
+    try {
+        const result = await db.query(`SELECT * FROM ${tableName} WHERE username = $1`, [username]);
+        if (result.rows.length > 0) {
+            const user = result.rows[0];
+            if (password === user.password) { // NOTE: In production, use bcrypt.compare
+                res.redirect(`/dashboard/${role}?userId=${user.id}`);
+            } else {
+                res.render("login.ejs", { role: role, error: "Invalid username or password." });
+            }
+        } else {
+            res.render("login.ejs", { role: role, error: "Invalid username or password." });
+        }
+    } catch (err) {
+        console.error("Login Error:", err);
+        res.status(500).send("An error occurred during login.");
     }
 });
 
-app.post("/signup/:role", (req, res) => {
+app.post("/signup/:role", async (req, res) => {
     const role = req.params.role;
+    if (role !== 'patient') {
+        return res.status(403).send("Signup is only allowed for patients.");
+    }
+
     const { name, dob, mobile, username, password } = req.body;
     if (mobile.length !== 10) {
         return res.render("signup.ejs", { role: role, error: "Mobile number must be exactly 10 digits." });
     }
-    if (role === 'patient') {
-        const newUser = { id: ++last_patient_id, name, dob, mobile, username, password };
-        patients.push(newUser);
-        res.redirect(`/login/${role}`);
-    } else {
-        return res.status(403).send("Signup is only allowed for patients.");
+
+    try {
+        // In production, you should hash the password. Example:
+        // const hashedPassword = await bcrypt.hash(password, saltRounds);
+        await db.query(
+            "INSERT INTO patients (name, dob, mobile, username, password) VALUES ($1, $2, $3, $4, $5)",
+            [name, dob, mobile, username, password] // replace 'password' with 'hashedPassword' in production
+        );
+        res.redirect(`/login/patient`);
+    } catch (err) {
+        console.error("Signup Error:", err);
+        res.render("signup.ejs", { role: role, error: "Username already exists or another error occurred." });
     }
 });
 
 // --- Dashboards ---
-app.get("/dashboard/patient", (req, res) => {
+app.get("/dashboard/patient", async (req, res) => {
     const { userId } = req.query;
-    const patient = patients.find(p => p.id == userId);
-    if (!patient) return res.redirect('/login/patient');
-    const patientAppointments = appointments.filter(a => a.patientId == userId);
-    res.render("patient-dashboard.ejs", { patient, appointments: patientAppointments, doctorQueueStatus });
+    try {
+        const patientRes = await db.query("SELECT * FROM patients WHERE id = $1", [userId]);
+        if (patientRes.rows.length === 0) return res.redirect('/login/patient');
+        const patient = patientRes.rows[0];
+
+        const appointmentsRes = await db.query("SELECT * FROM appointments WHERE patient_id = $1 ORDER BY date DESC, time DESC", [userId]);
+        res.render("patient-dashboard.ejs", { patient, appointments: appointmentsRes.rows });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading patient dashboard.");
+    }
 });
 
-app.get("/dashboard/doctor", (req, res) => {
+app.get("/dashboard/doctor", async (req, res) => {
+    // This route is already well-converted in the provided file.
     const { userId, clinicId } = req.query;
-    const doctor = doctors.find(d => d.id == userId);
-    if (!doctor) return res.redirect('/login/doctor');
-
-    const today = new Date().toISOString().slice(0, 10);
-
-    const allTodayAppointments = appointments
-        .filter(app => app.doctorId == userId && app.date === today)
-        .sort((a, b) => a.queueNumber - b.queueNumber);
-
-    const appointmentsToConsider = clinicId
-        ? allTodayAppointments.filter(app => app.clinicId == clinicId)
-        : allTodayAppointments;
-
-    const doneAppointmentsInView = appointmentsToConsider.filter(app => app.status === 'Done');
-    const isClinicQueueCompleted = doneAppointmentsInView.length >= appointmentsToConsider.length;
-
-    const availableAppointments = appointmentsToConsider.filter(
-        app => app.status !== 'Done' && app.status !== 'Absent'
-    );
-    const currentPatientInfo = availableAppointments[0] || null;
-    const nextPatientInfo = availableAppointments[1] || null;
-
-    const display = {
-        current: doneAppointmentsInView.length,
-        total: appointmentsToConsider.length
-    };
-    
-    const overallDone = allTodayAppointments.filter(app => app.status === 'Done');
-    const queue = {
-        currentNumber: overallDone.length > 0 ? Math.max(...overallDone.map(a => a.queueNumber)) : 0
-    };
-
-    const schedules = doctorSchedules.filter(s => s.doctorId == userId).map(s => ({
-        ...s, clinic: clinics.find(c => c.id === s.clinicId)
-    }));
-    const doctorRequests = clinicJoinRequests.filter(req => req.doctorId == userId);
-    
-    // Fetch invitations for the doctor
-    const invitations = receptionistInvitations.filter(inv => inv.doctorId == userId);
-
-    res.render("doctor-dashboard.ejs", {
-        doctor,
-        appointments: appointmentsToConsider,
-        schedules,
-        queue,
-        display,
-        isClinicQueueCompleted,
-        currentPatientInfo,
-        nextPatientInfo,
-        selectedClinicId: clinicId,
-        clinics,
-        doctorRequests,
-        invitations // Pass invitations to the view
-    });
-});
-app.get("/dashboard/receptionist", (req, res) => {
-    const { userId } = req.query;
-    const receptionist = receptionists.find(r => r.id == userId);
-    if (!receptionist) return res.redirect('/login/receptionist');
-
-    const clinic = clinics.find(c => c.id === receptionist.clinicId);
-    const clinicAppointments = appointments.filter(a => a.clinicId === receptionist.clinicId);
-
-    const clinicDoctors = doctorSchedules
-        .filter(s => s.clinicId === clinic.id)
-        .map(s => {
-            const doctor = doctors.find(d => d.id === s.doctorId);
-            return {
-                ...doctor,
-                schedule: {
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                    days: s.days
-                }
-            };
-        });
-    
-    const requests = clinicJoinRequests.filter(req => req.clinicId === receptionist.clinicId && req.status === 'pending');
-    
-    // Get invitations sent by THIS receptionist
-    const invitations = receptionistInvitations.filter(inv => inv.receptionistId == userId);
-
-    res.render("receptionist-dashboard.ejs", { 
-        receptionist, 
-        clinic, 
-        appointments: clinicAppointments, 
-        doctors: clinicDoctors,
-        allDoctors: doctors,
-        joinRequests: requests,
-        invitations // Pass invitations to the view
-    });
-});
-
-
-app.get("/dashboard/admin", (req, res) => {
-    const { userId } = req.query;
-    const admin = admins.find(a => a.id == userId);
-    if (!admin) return res.redirect('/login/admin');
-    res.render("admin-dashboard.ejs", { admin, patients, doctors, clinics, appointments, receptionists });
-});
-
-// --- Appointment Booking ---
-app.post("/book-appointment", (req, res) => {
-    const { patientId, doctorId, clinicId, date } = req.body;
-
-    const doctor = doctors.find(d => d.id == doctorId);
-    const patient = patients.find(p => p.id == patientId);
-    const clinic = clinics.find(c => c.id == clinicId);
-
-    // Calculate time for the new appointment
-    // Calculate time for the new appointment
-    const queueNumber = getNextQueueNumber(doctorId, date, clinicId);
-    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
-    let approxTime = schedule.startTime; // default
-    if (doctor.consultationDuration) {
-        const start = new Date(`${date}T${schedule.startTime}`);
-        start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
-        approxTime = start.toTimeString().slice(0,5);
-    }
-
-    // --- SLOT OVERLAP CHECK ---
-    const newAppStartTime = timeToMinutes(approxTime);
-    const newAppEndTime = newAppStartTime + doctor.consultationDuration;
-
-    const conflictingAppointment = appointments.find(app => {
-        if (app.patientId != patientId || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
-            return false;
+    try {
+        const doctorRes = await db.query("SELECT * FROM doctors WHERE id = $1", [userId]);
+        if (doctorRes.rows.length === 0) return res.redirect('/login/doctor');
+        const doctor = doctorRes.rows[0];
+        
+        const today = new Date().toISOString().slice(0, 10);
+        
+        let appointmentsQuery = `SELECT * FROM appointments WHERE doctor_id = $1 AND date = $2 ORDER BY queue_number ASC`;
+        const queryParams = [userId, today];
+        
+        if (clinicId) {
+            appointmentsQuery = `SELECT * FROM appointments WHERE doctor_id = $1 AND date = $2 AND clinic_id = $3 ORDER BY queue_number ASC`;
+            queryParams.push(clinicId);
         }
-        const existingDoctor = doctors.find(d => d.id === app.doctorId);
-        const existingAppStartTime = timeToMinutes(app.time);
-        const existingAppEndTime = existingAppStartTime + existingDoctor.consultationDuration;
 
-        // Check for overlap
-        return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
-    });
+        const appointmentsRes = await db.query(appointmentsQuery, queryParams);
+        const appointmentsToConsider = appointmentsRes.rows;
 
-    if (conflictingAppointment) {
-        const conflictingDoctor = doctors.find(d => d.id === conflictingAppointment.doctorId);
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">You already have an appointment with <strong>Dr. ${conflictingDoctor.name}</strong> at <strong>${conflictingAppointment.time}</strong>.</p>
-                <p style="margin-top: 0.5rem;">You cannot book another appointment during this time as it conflicts with your existing one.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
-            </div>
-        `);
+        const doneAppointments = appointmentsToConsider.filter(app => app.status === 'Done');
+        const isClinicQueueCompleted = appointmentsToConsider.length > 0 && doneAppointments.length >= appointmentsToConsider.length;
+        
+        const availableAppointments = appointmentsToConsider.filter(app => app.status !== 'Done' && app.status !== 'Absent');
+        const currentPatientInfo = availableAppointments[0] || null;
+        const nextPatientInfo = availableAppointments[1] || null;
+
+        const display = { current: doneAppointments.length, total: appointmentsToConsider.length };
+
+        const schedulesRes = await db.query("SELECT ds.*, c.name as clinic_name, c.address FROM doctor_schedules ds JOIN clinics c ON ds.clinic_id = c.id WHERE ds.doctor_id = $1", [userId]);
+        const schedules = schedulesRes.rows.map(s => ({...s, clinicId: s.clinic_id, clinic: { name: s.clinic_name, address: s.address }}));
+        
+        const clinicsRes = await db.query("SELECT * FROM clinics");
+        
+        const requestsRes = await db.query("SELECT * FROM clinic_join_requests WHERE doctor_id = $1", [userId]);
+        
+        const invitationsRes = await db.query("SELECT ci.*, c.name as clinic_name FROM receptionist_invitations ci JOIN clinics c ON ci.clinic_id = c.id WHERE ci.doctor_id = $1 AND ci.status = 'pending'", [userId]);
+        
+        const invitations = invitationsRes.rows.map(inv => ({...inv, schedule: { startTime: inv.start_time, endTime: inv.end_time, days: inv.days }}));
+
+        res.render("doctor-dashboard.ejs", {
+            doctor,
+            appointments: appointmentsToConsider,
+            schedules,
+            display,
+            isClinicQueueCompleted,
+            currentPatientInfo,
+            nextPatientInfo,
+            selectedClinicId: clinicId,
+            clinics: clinicsRes.rows,
+            doctorRequests: requestsRes.rows,
+            invitations
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading doctor dashboard.");
     }
-
-    // --- Daily Limit Check for the doctor ---
-    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
-    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>'s appointments for ${date} are full. The daily limit of (<strong>${doctor.dailyLimit}</strong>) has been reached.</p>
-                <p style="margin-top: 0.5rem;">Please try booking for another day or with a different doctor.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
-            </div>
-        `);
-    }
-
-    const newAppointment = {
-        id: ++last_appointment_id,
-        patientId: parseInt(patientId),
-        patientName: patient.name,
-        doctorId: parseInt(doctorId),
-        doctorName: doctor.name,
-        clinicId: parseInt(clinicId),
-        clinicName: clinic.name,
-        date,
-        time: approxTime,
-        status: "Confirmed",
-        queueNumber
-    };
-
-    appointments.push(newAppointment);
-    res.redirect(`/dashboard/patient?userId=${patientId}`);
 });
 
+app.get("/dashboard/receptionist", async (req, res) => {
+    // This route is already well-converted in the provided file.
+    const { userId } = req.query;
+    try {
+        const receptionistRes = await db.query("SELECT * FROM receptionists WHERE id = $1", [userId]);
+        if (receptionistRes.rows.length === 0) return res.redirect('/login/receptionist');
+        const receptionist = receptionistRes.rows[0];
+
+        const clinicRes = await db.query("SELECT * FROM clinics WHERE id = $1", [receptionist.clinic_id]);
+        const clinic = clinicRes.rows[0];
+
+        const appointmentsRes = await db.query("SELECT * FROM appointments WHERE clinic_id = $1", [receptionist.clinic_id]);
+        
+        const clinicDoctorsRes = await db.query(`
+            SELECT d.*, ds.start_time, ds.end_time, ds.days 
+            FROM doctors d 
+            JOIN doctor_schedules ds ON d.id = ds.doctor_id 
+            WHERE ds.clinic_id = $1`, [clinic.id]);
+        const clinicDoctors = clinicDoctorsRes.rows.map(d => ({ ...d, schedule: { startTime: d.start_time, endTime: d.end_time, days: d.days } }));
+
+        const allDoctorsRes = await db.query("SELECT * FROM doctors");
+        
+        const requestsRes = await db.query("SELECT * FROM clinic_join_requests WHERE clinic_id = $1 AND status = 'pending'", [receptionist.clinic_id]);
+        
+        const invitationsRes = await db.query("SELECT * FROM receptionist_invitations WHERE clinic_id = $1 AND status = 'pending'", [receptionist.clinic_id]);
+        const invitations = invitationsRes.rows.map(inv => ({...inv, schedule: { startTime: inv.start_time, endTime: inv.end_time, days: inv.days }}));
+
+        res.render("receptionist-dashboard.ejs", { 
+            receptionist, 
+            clinic, 
+            appointments: appointmentsRes.rows, 
+            doctors: clinicDoctors,
+            allDoctors: allDoctorsRes.rows,
+            joinRequests: requestsRes.rows,
+            invitations
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading receptionist dashboard.");
+    }
+});
+
+app.get("/dashboard/admin", async (req, res) => {
+    // This route is correct from the previous step.
+    const { userId } = req.query;
+    try {
+        const adminRes = await db.query("SELECT * FROM admins WHERE id = $1", [userId]);
+        if (adminRes.rows.length === 0) return res.redirect('/login/admin');
+        const admin = adminRes.rows[0];
+
+        const [patientsRes, doctorsRes, clinicsRes, appointmentsRes, receptionistsRes] = await Promise.all([
+            db.query("SELECT * FROM patients ORDER BY id DESC"),
+            db.query("SELECT * FROM doctors ORDER BY id DESC"),
+            db.query("SELECT * FROM clinics ORDER BY id DESC"),
+            db.query("SELECT * FROM appointments ORDER BY id DESC"),
+            db.query("SELECT * FROM receptionists ORDER BY id DESC"),
+        ]);
+
+        res.render("admin-dashboard.ejs", {
+            admin,
+            patients: patientsRes.rows,
+            doctors: doctorsRes.rows,
+            clinics: clinicsRes.rows,
+            appointments: appointmentsRes.rows,
+            receptionists: receptionistsRes.rows
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading admin dashboard.");
+    }
+});
+
+
+// --- Appointment & Scheduling ---
+app.post("/book-appointment", async (req, res) => {
+    const { patientId, doctorId, clinicId, date } = req.body;
+    try {
+        const [doctorRes, patientRes, clinicRes, scheduleRes] = await Promise.all([
+             db.query("SELECT * FROM doctors WHERE id = $1", [doctorId]),
+             db.query("SELECT * FROM patients WHERE id = $1", [patientId]),
+             db.query("SELECT * FROM clinics WHERE id = $1", [clinicId]),
+             db.query("SELECT * FROM doctor_schedules WHERE doctor_id = $1 AND clinic_id = $2", [doctorId, clinicId])
+        ]);
+
+        const doctor = doctorRes.rows[0];
+        const patient = patientRes.rows[0];
+        const clinic = clinicRes.rows[0];
+        const schedule = scheduleRes.rows[0];
+
+        if (!doctor || !patient || !clinic || !schedule) {
+            return res.status(404).send("Invalid data provided for booking.");
+        }
+
+        const appointmentsTodayRes = await db.query("SELECT COUNT(*) as count FROM appointments WHERE doctor_id = $1 AND date = $2", [doctorId, date]);
+        const todaysAppointmentsCount = parseInt(appointmentsTodayRes.rows[0].count);
+
+        if (doctor.daily_limit && todaysAppointmentsCount >= doctor.daily_limit) {
+            return res.status(403).send(`Booking Failed: Dr. ${doctor.name}'s schedule for ${date} is full.`);
+        }
+
+        const queueNumber = todaysAppointmentsCount + 1;
+        let approxTime = schedule.start_time;
+        if (doctor.consultation_duration) {
+            const start = new Date(`${date}T${schedule.start_time}`);
+            start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultation_duration);
+            approxTime = start.toTimeString().slice(0, 5);
+        }
+
+        await db.query(
+            "INSERT INTO appointments (patient_id, patient_name, doctor_id, doctor_name, clinic_id, clinic_name, date, time, queue_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            [patient.id, patient.name, doctor.id, doctor.name, clinic.id, clinic.name, date, approxTime, queueNumber]
+        );
+        
+        res.redirect(`/dashboard/patient?userId=${patientId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error booking appointment.");
+    }
+});
 
 // --- Doctor Actions ---
-app.post("/doctor/update-appointment-status", (req, res) => {
-    const { doctorId, appointmentId, status } = req.body;
-    const appointment = appointments.find(a => a.id == appointmentId);
-    if (appointment) appointment.status = status;
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
-});
-
-app.post("/doctor/set-limit", (req, res) => {
-    const { doctorId, dailyLimit } = req.body;
-    const doctor = doctors.find(d => d.id == doctorId);
-    if (doctor) doctor.dailyLimit = parseInt(dailyLimit);
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
-});
-
-app.post("/doctor/delete-schedule", (req, res) => {
-    const { doctorId, scheduleId } = req.body;
-    
-    const scheduleIndex = doctorSchedules.findIndex(s => s.id == scheduleId && s.doctorId == doctorId);
-    
-    if (scheduleIndex > -1) {
-        doctorSchedules.splice(scheduleIndex, 1);
+app.post("/doctor/update-appointment-status", async (req, res) => {
+    const { doctorId, appointmentId, status, clinicId } = req.body;
+    try {
+        await db.query("UPDATE appointments SET status = $1 WHERE id = $2 AND doctor_id = $3", [status, appointmentId, doctorId]);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error updating status.");
     }
-    
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
-app.post("/doctor/clear-list", (req, res) => {
+app.post("/doctor/next-patient", async (req, res) => {
+    // This route is correct from the previous step.
+    const { doctorId, clinicId } = req.body;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+        let query = `
+            SELECT id FROM appointments 
+            WHERE doctor_id = $1 AND date = $2 AND status NOT IN ('Done', 'Absent')
+            ORDER BY queue_number ASC 
+            LIMIT 1`;
+        let params = [doctorId, today];
+
+        if (clinicId) {
+            query = `
+            SELECT id FROM appointments 
+            WHERE doctor_id = $1 AND clinic_id = $2 AND date = $3 AND status NOT IN ('Done', 'Absent')
+            ORDER BY queue_number ASC 
+            LIMIT 1`;
+            params = [doctorId, clinicId, today];
+        }
+
+        const nextPatientRes = await db.query(query, params);
+
+        if (nextPatientRes.rows.length > 0) {
+            const appointmentToUpdateId = nextPatientRes.rows[0].id;
+            await db.query("UPDATE appointments SET status = 'Done' WHERE id = $1", [appointmentToUpdateId]);
+        }
+        
+        res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error advancing queue.");
+    }
+});
+
+app.post("/doctor/set-limit", async (req, res) => {
+    const { doctorId, dailyLimit } = req.body;
+    try {
+        await db.query("UPDATE doctors SET daily_limit = $1 WHERE id = $2", [parseInt(dailyLimit), doctorId]);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error setting daily limit.");
+    }
+});
+
+app.post("/doctor/set-consultation-time", async (req, res) => {
+    const { doctorId, duration } = req.body;
+    try {
+        await db.query("UPDATE doctors SET consultation_duration = $1 WHERE id = $2", [parseInt(duration), doctorId]);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error setting consultation time.");
+    }
+});
+
+app.post("/doctor/delete-schedule", async (req, res) => {
+    const { doctorId, scheduleId } = req.body;
+    try {
+        await db.query("DELETE FROM doctor_schedules WHERE id = $1 AND doctor_id = $2", [scheduleId, doctorId]);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error deleting schedule.");
+    }
+});
+
+app.post("/doctor/clear-list", async (req, res) => {
     const { doctorId } = req.body;
     const today = new Date().toISOString().slice(0, 10);
-
-    // Filter out today's appointments for this doctor from the main list
-    appointments = appointments.filter(app => 
-        !(app.doctorId == doctorId && app.date === today)
-    );
-
-    // Also reset the queue status for this doctor
-    const queueKey = `${doctorId}_${clinicId}`;
-    if (doctorQueueStatus[queueKey]) {
-        doctorQueueStatus[queueKey] = { 
-            currentNumber: 0, 
-            totalPatients: 0, 
-            date: today 
-        };
+    try {
+        await db.query("DELETE FROM appointments WHERE doctor_id = $1 AND date = $2", [doctorId, today]);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error clearing today's list.");
     }
-
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
 
-// --- NEW Route: For doctor to add/join a clinic ---
-app.post("/doctor/add-clinic", (req, res) => {
+app.post("/doctor/reset-queue", async (req, res) => {
+    const { doctorId, clinicId } = req.body;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+        let query = "UPDATE appointments SET status = 'Confirmed' WHERE doctor_id = $1 AND date = $2 AND status = 'Done'";
+        let params = [doctorId, today];
+        if (clinicId) {
+            query += " AND clinic_id = $3";
+            params.push(clinicId);
+        }
+        await db.query(query, params);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error resetting queue.");
+    }
+});
+
+app.post("/doctor/add-clinic", async (req, res) => {
     const { doctorId, action, clinicId, address, startTime, endTime, days, customSchedule } = req.body;
     const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
 
-    if (action === 'join') {
-        const existingRequest = clinicJoinRequests.find(r => r.doctorId == doctorId && r.clinicId == clinicId && r.status === 'pending');
-        if (existingRequest) {
-            return res.redirect(`/dashboard/doctor?userId=${doctorId}`); // Already a pending request
-        }
-        const doctor = doctors.find(d => d.id == doctorId);
-        const newRequest = {
-            id: ++last_request_id,
-            doctorId: parseInt(doctorId),
-            doctorName: doctor.name,
-            doctorSpecialty: doctor.specialty,
-            clinicId: parseInt(clinicId),
-            schedule: { startTime, endTime, days: scheduleDays },
-            status: 'pending'
-        };
-        clinicJoinRequests.push(newRequest);
-    } else if (action === 'create') {
-        const doctor = doctors.find(d => d.id == doctorId);
-        const newClinic = {
-            id: ++last_clinic_id,
-            name: `${doctor.name}'s Private Clinic`,
-            address: address,
-            phone: "N/A"
-        };
-        clinics.push(newClinic);
+    try {
+        const doctorRes = await db.query("SELECT name, specialty FROM doctors WHERE id = $1", [doctorId]);
+        const doctor = doctorRes.rows[0];
 
-        const newSchedule = {
-            id: ++last_schedule_id,
-            doctorId: parseInt(doctorId),
-            clinicId: newClinic.id,
-            startTime,
-            endTime,
-            days: scheduleDays
-        };
-        doctorSchedules.push(newSchedule);
+        if (action === 'join') {
+            await db.query(
+                `INSERT INTO clinic_join_requests (doctor_id, doctor_name, doctor_specialty, clinic_id, start_time, end_time, days, status) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+                [doctorId, doctor.name, doctor.specialty, clinicId, startTime, endTime, scheduleDays]
+            );
+        } else if (action === 'create') {
+            const newClinicRes = await db.query(
+                "INSERT INTO clinics (name, address) VALUES ($1, $2) RETURNING id",
+                [`${doctor.name}'s Private Clinic`, address]
+            );
+            const newClinicId = newClinicRes.rows[0].id;
+            await db.query(
+                "INSERT INTO doctor_schedules (doctor_id, clinic_id, start_time, end_time, days) VALUES ($1, $2, $3, $4, $5)",
+                [doctorId, newClinicId, startTime, endTime, scheduleDays]
+            );
+        }
+        res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error processing clinic request.");
     }
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
 });
+
+app.post("/doctor/handle-invitation", async (req, res) => {
+    const { doctorId, invitationId, action } = req.body;
+    try {
+        if (action === 'accept') {
+            const invRes = await db.query("SELECT * FROM receptionist_invitations WHERE id = $1", [invitationId]);
+            const invitation = invRes.rows[0];
+            if (invitation) {
+                await db.query(
+                    "INSERT INTO doctor_schedules (doctor_id, clinic_id, start_time, end_time, days) VALUES ($1, $2, $3, $4, $5)",
+                    [invitation.doctor_id, invitation.clinic_id, invitation.start_time, invitation.end_time, invitation.days]
+                );
+            }
+        }
+        await db.query("DELETE FROM receptionist_invitations WHERE id = $1", [invitationId]);
+        res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error handling invitation.");
+    }
+});
+
 
 // --- Receptionist Actions ---
-app.post("/receptionist/add-doctor", (req, res) => {
-    const { receptionistId, name, specialty, username, password, startTime, endTime, days, customSchedule, Phonenumber } = req.body;
-    
-    const receptionist = receptionists.find(r => r.id == receptionistId);
-    if (!receptionist) {
-        return res.status(404).send("Receptionist not found.");
+app.get("/receptionist/doctor-appointments/:doctorId", async (req, res) => {
+    const { doctorId } = req.params;
+    const { receptionistId } = req.query;
+    try {
+        const receptionistRes = await db.query("SELECT * FROM receptionists WHERE id = $1", [receptionistId]);
+        if (receptionistRes.rows.length === 0) return res.status(404).send("Receptionist not found");
+        const receptionist = receptionistRes.rows[0];
+        const clinicId = receptionist.clinic_id;
+
+        const [doctorRes, clinicRes] = await Promise.all([
+            db.query("SELECT * FROM doctors WHERE id = $1", [doctorId]),
+            db.query("SELECT * FROM clinics WHERE id = $1", [clinicId])
+        ]);
+        if (doctorRes.rows.length === 0 || clinicRes.rows.length === 0) return res.status(404).send("Doctor or Clinic not found");
+        
+        const appointmentsRes = await db.query("SELECT * FROM appointments WHERE doctor_id = $1 AND clinic_id = $2", [doctorId, clinicId]);
+
+        res.render("doctor-appointments.ejs", {
+            doctor: doctorRes.rows[0],
+            appointments: appointmentsRes.rows,
+            clinic: clinicRes.rows[0],
+            receptionist
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error fetching doctor appointments.");
     }
-    
-    const newDoctor = {
-        id: ++last_doctors_id,
-        name,
-        specialty,
-        username,
-        password,
-        phone: Phonenumber, // This line is added to save the phone number
-        dailyLimit: 20, // Default daily limit
-        consultationDuration: 10 // Default consultation duration
-    };
-    doctors.push(newDoctor);
-
-    const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
-
-    const newSchedule = {
-        id: ++last_schedule_id,
-        doctorId: newDoctor.id,
-        clinicId: receptionist.clinicId,
-        startTime,
-        endTime,
-        days: scheduleDays
-    };
-    doctorSchedules.push(newSchedule);
-    
-    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
 });
 
-app.post("/receptionist/invite-doctor", (req, res) => {
-    const { receptionistId, doctorId, startTime, endTime, days, customSchedule } = req.body;
-    
-    const receptionist = receptionists.find(r => r.id == receptionistId);
-    if (!receptionist) {
-        return res.status(404).send("Receptionist not found.");
-    }
-    
-    const doctor = doctors.find(d => d.id == doctorId);
-    if (!doctor) {
-        return res.status(404).send("Doctor not found.");
-    }
+app.post("/receptionist/add-appointment", async (req, res) => {
+    const { doctorId, clinicId, patientName, patientAge, receptionistId } = req.body;
+    const date = new Date().toISOString().slice(0, 10);
+    try {
+        const [doctorRes, clinicRes, scheduleRes] = await Promise.all([
+             db.query("SELECT * FROM doctors WHERE id = $1", [doctorId]),
+             db.query("SELECT * FROM clinics WHERE id = $1", [clinicId]),
+             db.query("SELECT * FROM doctor_schedules WHERE doctor_id = $1 AND clinic_id = $2", [doctorId, clinicId])
+        ]);
+        const doctor = doctorRes.rows[0];
+        const clinic = clinicRes.rows[0];
+        const schedule = scheduleRes.rows[0];
+        if (!doctor || !clinic || !schedule) return res.status(404).send("Doctor or clinic schedule not found.");
 
-    const clinic = clinics.find(c => c.id === receptionist.clinicId);
-    if (!clinic) {
-        return res.status(404).send("Clinic not found.");
-    }
+        const appointmentsTodayRes = await db.query("SELECT COUNT(*) as count FROM appointments WHERE doctor_id = $1 AND date = $2 AND clinic_id = $3", [doctorId, date, clinicId]);
+        const todaysAppointmentsCount = parseInt(appointmentsTodayRes.rows[0].count);
 
-    const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
-
-    const newInvitation = {
-        id: ++last_request_id, // Using the same ID counter for simplicity
-        doctorId: parseInt(doctorId),
-        receptionistId: parseInt(receptionistId),
-        clinicId: receptionist.clinicId,
-        clinicName: clinic.name,
-        schedule: { startTime, endTime, days: scheduleDays },
-        status: 'pending'
-    };
-    receptionistInvitations.push(newInvitation);
-    
-    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
-});
-
-app.post("/doctor/handle-invitation", (req, res) => {
-    const { doctorId, invitationId, action } = req.body;
-    const invitationIndex = receptionistInvitations.findIndex(inv => inv.id == invitationId);
-
-    if (invitationIndex !== -1) {
-        if (action === 'accept') {
-            const invitation = receptionistInvitations[invitationIndex];
-            const newSchedule = {
-                id: ++last_schedule_id,
-                doctorId: invitation.doctorId,
-                clinicId: invitation.clinicId,
-                startTime: invitation.schedule.startTime,
-                endTime: invitation.schedule.endTime,
-                days: invitation.schedule.days
-            };
-            doctorSchedules.push(newSchedule);
+        if (doctor.daily_limit && todaysAppointmentsCount >= doctor.daily_limit) {
+            return res.status(403).send(`Booking Failed: Dr. ${doctor.name}'s schedule is full.`);
         }
-        receptionistInvitations.splice(invitationIndex, 1);
-    }
+        
+        const queueNumber = todaysAppointmentsCount + 1;
+        let approxTime = schedule.start_time;
+        if (doctor.consultation_duration) {
+            const start = new Date(`${date}T${schedule.start_time}`);
+            start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultation_duration);
+            approxTime = start.toTimeString().slice(0, 5);
+        }
 
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
+        await db.query(
+            `INSERT INTO appointments (patient_name, doctor_id, doctor_name, clinic_id, clinic_name, date, time, queue_number) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [`${patientName} (Age: ${patientAge})`, doctor.id, doctor.name, clinic.id, clinic.name, date, approxTime, queueNumber]
+        );
+
+        res.redirect(`/receptionist/doctor-appointments/${doctorId}?receptionistId=${receptionistId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error adding walk-in appointment.");
+    }
 });
 
-app.post("/receptionist/delete-doctor", (req, res) => {
-    const { doctorId, receptionistId } = req.body;
-    
-    // Find the receptionist to identify the clinic
-    const receptionist = receptionists.find(r => r.id == receptionistId);
-    if (!receptionist) {
-        return res.status(404).send("Receptionist not found.");
-    }
-    const clinicId = receptionist.clinicId;
-
-    // Instead of deleting the doctor, just remove the schedule for this specific clinic
-    doctorSchedules = doctorSchedules.filter(s => 
-        !(s.doctorId == doctorId && s.clinicId == clinicId)
-    );
-    
-    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
-});
-
-// --- NEW Route: For receptionist to handle join requests ---
-app.post("/receptionist/handle-join-request", (req, res) => {
+app.post("/receptionist/handle-join-request", async (req, res) => {
     const { requestId, action, receptionistId } = req.body;
-    const requestIndex = clinicJoinRequests.findIndex(r => r.id == requestId);
-
-    if (requestIndex === -1) {
-        return res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+    try {
+        if (action === 'accept') {
+            const requestRes = await db.query("SELECT * FROM clinic_join_requests WHERE id = $1", [requestId]);
+            const request = requestRes.rows[0];
+            if (request) {
+                await db.query(
+                    "INSERT INTO doctor_schedules (doctor_id, clinic_id, start_time, end_time, days) VALUES ($1, $2, $3, $4, $5)",
+                    [request.doctor_id, request.clinic_id, request.start_time, request.end_time, request.days]
+                );
+            }
+        }
+        await db.query("DELETE FROM clinic_join_requests WHERE id = $1", [requestId]);
+        res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error handling join request.");
     }
+});
 
-    if (action === 'accept') {
-        const request = clinicJoinRequests[requestIndex];
-        const newSchedule = {
-            id: ++last_schedule_id,
-            doctorId: request.doctorId,
-            clinicId: request.clinicId,
-            startTime: request.schedule.startTime,
-            endTime: request.schedule.endTime,
-            days: request.schedule.days
-        };
-        doctorSchedules.push(newSchedule);
+app.post("/receptionist/add-doctor", async (req, res) => {
+    const { receptionistId, name, specialty, username, password, startTime, endTime, days, customSchedule, Phonenumber } = req.body;
+    try {
+        const receptionistRes = await db.query("SELECT clinic_id FROM receptionists WHERE id = $1", [receptionistId]);
+        const clinicId = receptionistRes.rows[0].clinic_id;
+
+        const newDoctorRes = await db.query(
+            "INSERT INTO doctors (name, specialty, username, password, phone) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            [name, specialty, username, password, Phonenumber]
+        );
+        const newDoctorId = newDoctorRes.rows[0].id;
+
+        const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
+
+        await db.query(
+            "INSERT INTO doctor_schedules (doctor_id, clinic_id, start_time, end_time, days) VALUES ($1, $2, $3, $4, $5)",
+            [newDoctorId, clinicId, startTime, endTime, scheduleDays]
+        );
+        
+        res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error adding new doctor.");
     }
+});
 
-    // Remove request whether it's accepted or deleted
-    clinicJoinRequests.splice(requestIndex, 1);
-    
-    res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+app.post("/receptionist/invite-doctor", async (req, res) => {
+    const { receptionistId, doctorId, startTime, endTime, days, customSchedule } = req.body;
+    try {
+        const receptionistRes = await db.query("SELECT clinic_id FROM receptionists WHERE id = $1", [receptionistId]);
+        const clinicId = receptionistRes.rows[0].clinic_id;
+        const scheduleDays = customSchedule || (Array.isArray(days) ? days.join(', ') : days || '');
+        
+        await db.query(
+            `INSERT INTO receptionist_invitations (doctor_id, receptionist_id, clinic_id, start_time, end_time, days, status) 
+             VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+             [doctorId, receptionistId, clinicId, startTime, endTime, scheduleDays]
+        );
+        res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error sending invitation.");
+    }
+});
+
+app.post("/receptionist/delete-doctor", async (req, res) => {
+    const { doctorId, receptionistId } = req.body;
+    try {
+        const receptionistRes = await db.query("SELECT clinic_id FROM receptionists WHERE id = $1", [receptionistId]);
+        const clinicId = receptionistRes.rows[0].clinic_id;
+        // This only removes the doctor from the clinic, doesn't delete the doctor's account
+        await db.query("DELETE FROM doctor_schedules WHERE doctor_id = $1 AND clinic_id = $2", [doctorId, clinicId]);
+        res.redirect(`/dashboard/receptionist?userId=${receptionistId}`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error removing doctor from clinic.");
+    }
 });
 
 
 // --- Admin Actions ---
-app.post("/admin/add-doctor", (req, res) => {
-    const { name, specialty, username, password, phone, dailyLimit, adminId, clinicIds, customAddress, customStartTime, customEndTime, customDays } = req.body;
-    const newDoctor = { id: ++last_doctors_id, name, specialty, username, password, phone, dailyLimit: parseInt(dailyLimit) || 20 };
-    doctors.push(newDoctor);
-
-    if (clinicIds) {
-        const selectedClinicIds = Array.isArray(clinicIds) ? clinicIds : [clinicIds];
-        selectedClinicIds.forEach(clinicId => {
-            const startTime = req.body[`startTime_${clinicId}`];
-            const endTime = req.body[`endTime_${clinicId}`];
-            const days = req.body[`days_${clinicId}`];
-
-            if (startTime && endTime && days) {
-                doctorSchedules.push({
-                    id: ++last_schedule_id,
-                    doctorId: newDoctor.id,
-                    clinicId: parseInt(clinicId),
-                    startTime, endTime,
-                    days
-                });
-            }
-        });
-    }
-
-    // Handle single or multiple custom addresses
-    if (customAddress) {
-        const addresses = Array.isArray(customAddress) ? customAddress : [customAddress];
-        const startTimes = Array.isArray(customStartTime) ? customStartTime : [customStartTime];
-        const endTimes = Array.isArray(customEndTime) ? customEndTime : [customEndTime];
-        const daysArray = Array.isArray(customDays) ? customDays : [customDays];
-
-        addresses.forEach((address, index) => {
-            if (address.trim() !== '') { // Ensure we don't create clinics for empty strings
-                const newClinic = { 
-                    id: ++last_clinic_id, 
-                    name: `${name}'s Private Practice`, 
-                    address: address, 
-                    phone: "N/A" 
-                };
-                clinics.push(newClinic);
-                doctorSchedules.push({
-                    id: ++last_schedule_id,
-                    doctorId: newDoctor.id,
-                    clinicId: newClinic.id,
-                    startTime: startTimes[index],
-                    endTime: endTimes[index],
-                    days: daysArray[index]
-                });
-            }
-        });
-    }
-
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-
-app.post("/admin/add-clinic", (req, res) => {
-    const { name, address, phone, receptionistName, username, password, adminId } = req.body;
-    const newClinic = { id: ++last_clinic_id, name, address, phone };
-    clinics.push(newClinic);
-
-    if (receptionistName && username && password) {
-        const newReceptionist = {
-            id: ++last_receptionists_id,
-            name: receptionistName,
-            clinicId: newClinic.id,
-            username,
-            password
-        };
-        receptionists.push(newReceptionist);
-    }
-    
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/delete-clinic", (req, res) => {
-    const { clinicId, adminId } = req.body;
-    clinics = clinics.filter(c => c.id != clinicId);
-    receptionists = receptionists.filter(r => r.clinicId != clinicId); // Also delete associated receptionist
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/delete-doctor", (req, res) => {
-    const { doctorId, adminId } = req.body;
-    doctors = doctors.filter(d => d.id != doctorId);
-    // Also delete associated schedules
-    doctorSchedules = doctorSchedules.filter(s => s.doctorId != doctorId);
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/add-patient", (req, res) => {
-    const { name, dob, mobile, username, password, adminId } = req.body;
-    patients.push({ id: ++last_patient_id, name, dob, mobile, username, password });
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/delete-patient", (req, res) => {
-    const { patientId, adminId } = req.body;
-    patients = patients.filter(p => p.id != patientId);
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/add-receptionist", (req, res) => {
-    const { name, clinicId, username, password, adminId } = req.body;
-    receptionists.push({
-        id: ++last_receptionists_id,
-        name,
-        clinicId: parseInt(clinicId),
-        username,
-        password
-    });
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/delete-receptionist", (req, res) => {
-    const { receptionistId, adminId } = req.body;
-    receptionists = receptionists.filter(r => r.id != receptionistId);
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-app.post("/admin/add-appointment", (req, res) => {
-    const { patientId, doctorId, clinicId, date, time, adminId } = req.body;
-    const patient = patients.find(p => p.id == patientId);
-    const doctor = doctors.find(d => d.id == doctorId);
-    const clinic = clinics.find(c => c.id == clinicId);
-
-    // --- SLOT OVERLAP CHECK ---
-    const newAppStartTime = timeToMinutes(time);
-    const newAppEndTime = newAppStartTime + (doctor.consultationDuration || 15);
-
-    const conflictingAppointment = appointments.find(app => {
-        if (app.patientId != patientId || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
-            return false;
-        }
-        const existingDoctor = doctors.find(d => d.id === app.doctorId);
-        const existingAppStartTime = timeToMinutes(app.time);
-        const existingAppEndTime = existingAppStartTime + (existingDoctor.consultationDuration || 15);
-
-        return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
-    });
-
-    if (conflictingAppointment) {
-        const conflictingDoctor = doctors.find(d => d.id === conflictingAppointment.doctorId);
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">The patient, <strong>${patient.name}</strong>, already has an appointment with <strong>Dr. ${conflictingDoctor.name}</strong> at <strong>${conflictingAppointment.time}</strong>.</p>
-                <p style="margin-top: 0.5rem;">You cannot book another appointment for this patient during that time as it conflicts with their existing one.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
-            </div>
-        `);
-    }
-
-    // --- Daily Limit Check ---
-    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date).length;
-    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>'s appointments for ${date} are full. The daily limit of (<strong>${doctor.dailyLimit}</strong>) has been reached.</p>
-                <p style="margin-top: 0.5rem;">Please try booking for another day or with a different doctor.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
-            </div>
-        `);
-    }
-
-    appointments.push({
-        id: ++last_appointment_id,
-        patientId: parseInt(patientId),
-        patientName: patient.name,
-        doctorId: parseInt(doctorId),
-        doctorName: doctor.name,
-        clinicId: parseInt(clinicId),
-        clinicName: clinic.name,
-        date, time,
-        status: "Confirmed",
-        queueNumber: getNextQueueNumber(doctorId, date, clinicId)
-    });
-    res.redirect(`/dashboard/admin?userId=${adminId}`);
-});
-
-// --- APIs ---
-app.get("/api/doctors", (req, res) => {
-    const { name, specialty, clinic: clinicQuery, date, time } = req.query;
-    let filteredDoctors = doctors;
-
-    if (name) filteredDoctors = filteredDoctors.filter(d => d.name.toLowerCase().includes(name.toLowerCase()));
-    if (specialty) filteredDoctors = filteredDoctors.filter(d => d.specialty.toLowerCase().includes(specialty.toLowerCase()));
-
-    let results = [];
-    filteredDoctors.forEach(doctor => {
-        let schedules = doctorSchedules.filter(s => s.doctorId === doctor.id);
-        if (clinicQuery) {
-            schedules = schedules.filter(s => {
-                const clinic = clinics.find(c => c.id === s.clinicId);
-                return clinic && (clinic.name.toLowerCase().includes(clinicQuery.toLowerCase()) || clinic.address.toLowerCase().includes(clinicQuery.toLowerCase()));
-            });
-        }
-        if (schedules.length > 0) {
-            results.push({
-                id: doctor.id,
-                name: doctor.name,
-                specialty: doctor.specialty,
-                schedules: schedules.map(s => ({
-                    ...s,
-                    clinic: clinics.find(c => c.id === s.clinicId),
-                    availableSlots: date ? getAvailableSlots(doctor.id, date, s) : []
-                }))
-            });
-        }
-    });
-
-    // Filter by exact time availability
-    if (time) {
-        results = results.filter(d => d.schedules.some(s => {
-            const scheduleStart = new Date(`1970-01-01T${s.startTime}`);
-            const scheduleEnd = new Date(`1970-01-01T${s.endTime}`);
-            const requestedTime = new Date(`1970-01-01T${time}`);
-            return requestedTime >= scheduleStart && requestedTime <= scheduleEnd &&
-                   !appointments.some(app => app.doctorId === d.id && app.time === time);
-        }));
-    }
-
-    res.json(results);
-});
-
-app.get("/api/queue-status/:doctorId/:clinicId", (req, res) => {
-    const { doctorId, clinicId } = req.params;
-    const today = new Date().toISOString().slice(0, 10);
-    const queueKey = `${doctorId}_${clinicId}`;
-    const queue = doctorQueueStatus[queueKey];
-    if (queue && queue.date === today) {
-        res.json(queue);
-    } else {
-        res.json({ currentNumber: 0, totalPatients: 0 });
-    }
-});
-
-app.post("/doctor/set-consultation-time", (req, res) => {
-    const { doctorId, duration } = req.body;
-    const doctor = doctors.find(d => d.id == doctorId);
-    if (doctor) doctor.consultationDuration = parseInt(duration);
-    res.redirect(`/dashboard/doctor?userId=${doctorId}`);
-});
-
-app.get("/receptionist/doctor-appointments/:doctorId", (req, res) => {
-    const { doctorId } = req.params;
-    const { receptionistId } = req.query; // Get receptionistId from query
-
-    const receptionist = receptionists.find(r => r.id == receptionistId);
-    if (!receptionist) return res.status(404).send("Receptionist not found");
-
-    const clinicId = receptionist.clinicId;
-
-    const doctor = doctors.find(d => d.id == doctorId);
-    if (!doctor) return res.status(404).send("Doctor not found");
-
-    // Find the doctor's schedule for the specific clinic of the receptionist
-    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
-    if (!schedule) return res.status(404).send("Doctor schedule not found for this clinic");
-
-    const clinic = clinics.find(c => c.id == clinicId);
-    if (!clinic) return res.status(404).send("Clinic not found");
-
-    // Filter appointments for the specific doctor and clinic
-    const appointmentsForClinic = appointments.filter(
-        a => a.doctorId == doctorId && a.clinicId == clinicId
-    );
-
-    res.render("doctor-appointments.ejs", {
-        doctor,
-        appointments: appointmentsForClinic,
-        clinic,
-        receptionist // Pass receptionist to the view
-    });
-});
-
-app.post("/receptionist/add-appointment", (req, res) => {
-    const { doctorId, clinicId, patientName, patientAge, receptionistId } = req.body;
-
-    if (!doctorId || !clinicId || !patientName || !patientAge) {
-        return res.status(400).send("Patient name and age are required.");
-    }
-
-    const doctor = doctors.find(d => d.id == doctorId);
-    const clinic = clinics.find(c => c.id == clinicId);
-    if (!doctor || !clinic) return res.status(404).send("Doctor or clinic not found");
-
-    const date = new Date().toISOString().slice(0, 10);
-    
-    const queueNumber = getNextQueueNumber(doctorId, date, clinicId);
-    const schedule = doctorSchedules.find(s => s.doctorId == doctorId && s.clinicId == clinicId);
-    let approxTime = schedule ? schedule.startTime : '00:00';
-    if (doctor.consultationDuration && schedule) {
-        const start = new Date(`${date}T${schedule.startTime}`);
-        start.setMinutes(start.getMinutes() + (queueNumber - 1) * doctor.consultationDuration);
-        approxTime = start.toTimeString().slice(0,5);
-    }
-
-    // --- Daily Limit Check ---
-    const todaysAppointmentsCount = appointments.filter(app => app.doctorId == doctorId && app.date === date && app.clinicId == clinicId).length;
-    if (doctor.dailyLimit && todaysAppointmentsCount >= doctor.dailyLimit) {
-        return res.status(403).send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 40px; color: #b91c1c; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; max-width: 600px; margin: 50px auto;">
-                <h1 style="color: #991b1b;">Booking Failed</h1>
-                <p style="font-size: 1.1rem; margin-top: 1rem;">Sorry, <strong>Dr. ${doctor.name}</strong>'s appointments for ${date} are full. The daily limit of (<strong>${doctor.dailyLimit}</strong>) has been reached.</p>
-                <p style="margin-top: 0.5rem;">Please try booking for another day or with a different doctor.</p>
-                <a href="javascript:history.back()" style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go Back</a>
-            </div>
-        `);
-    }
-
-    const newAppointment = {
-        id: ++last_appointment_id,
-        patientId: null, // No patient account is created for walk-ins
-        patientName: `${patientName} (Age: ${patientAge})`,
-        doctorId: parseInt(doctorId),
-        doctorName: doctor.name,
-        clinicId: parseInt(clinicId),
-        clinicName: clinic.name,
-        date,
-        time: approxTime,
-        status: "Confirmed",
-        queueNumber: getNextQueueNumber(doctorId, date, clinicId)
-    };
-
-    appointments.push(newAppointment);
-
-    res.redirect(`/receptionist/doctor-appointments/${doctorId}?receptionistId=${receptionistId}`);
-});
-
-// --- UPDATED Doctor Queue Management Route ---
-app.post("/doctor/next-patient", (req, res) => {
-    const { doctorId, clinicId } = req.body;
-    const today = new Date().toISOString().slice(0, 10);
-    const queueKey = `${doctorId}_${clinicId}`;
-
-    // IMPORTANT: This logic now focuses *only* on the relevant clinic from the start.
-    let appointmentsToConsider = appointments.filter(app =>
-        app.doctorId == doctorId && app.date === today && app.clinicId == clinicId
-    );
-
-    // Find the next available patient within this specific, filtered list.
-    const nextAvailablePatient = appointmentsToConsider
-        .sort((a, b) => a.queueNumber - b.queueNumber)
-        .find(app => app.status !== 'Done' && app.status !== 'Absent');
-
-    if (nextAvailablePatient) {
-        // Find the patient in the main appointments array by ID and update them.
-        const appointmentToUpdate = appointments.find(app => app.id === nextAvailablePatient.id);
-        if (appointmentToUpdate) {
-            appointmentToUpdate.status = 'Done';
-
-            // *** START: NEW CODE TO UPDATE LIVE QUEUE STATUS (CLINIC-SPECIFIC) ***
-            // Initialize or find the queue status for the doctor and clinic
-            if (!doctorQueueStatus[queueKey] || doctorQueueStatus[queueKey].date !== today) {
-                doctorQueueStatus[queueKey] = {
-                    date: today,
-                    currentNumber: 0,
-                    totalPatients: appointmentsToConsider.length
-                };
-            }
-            // Update the current number to the patient who just finished
-            doctorQueueStatus[queueKey].currentNumber = appointmentToUpdate.queueNumber;
-            // *** END: NEW CODE TO UPDATE LIVE QUEUE STATUS (CLINIC-SPECIFIC) ***
-        }
-    }
-
-    res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
-});
-
-
-app.post("/doctor/reset-queue", (req, res) => {
-    const { doctorId, clinicId } = req.body;
-    const today = new Date().toISOString().slice(0, 10);
-    
-    let appointmentsToReset = appointments.filter(app => 
-        app.doctorId == doctorId && app.date === today
-    );
-    
-    if (clinicId) {
-        appointmentsToReset = appointmentsToReset.filter(app => app.clinicId == clinicId);
-    }
-    
-    // Reset status of 'Done' appointments back to 'Confirmed' for the selected scope
-    appointmentsToReset.forEach(app => {
-        if (app.status === 'Done') {
-            app.status = 'Confirmed';
-        }
-    });
-
-    const queueKey = `${doctorId}_${clinicId}`;
-    if (doctorQueueStatus[queueKey]) {
-        doctorQueueStatus[queueKey].currentNumber = 0;
-    }
-    
-    res.redirect(`/dashboard/doctor?userId=${doctorId}&clinicId=${clinicId || ''}`);
-});
-
-// Enhanced API endpoint for real-time queue status
-app.get("/api/queue-status/:doctorId/:clinicId", (req, res) => {
-    const { doctorId, clinicId } = req.params;
-    const today = new Date().toISOString().slice(0, 10);
-    
-    // Get today's appointments for this doctor at the specific clinic
-    const todayAppointments = appointments.filter(app => 
-        app.doctorId == doctorId && app.clinicId == clinicId && app.date === today
-    ).sort((a, b) => a.queueNumber - b.queueNumber);
-    
-    const queueKey = `${doctorId}_${clinicId}`;
-    let queue = doctorQueueStatus[queueKey];
-    
-    // Initialize if doesn't exist or different date
-    if (!queue || queue.date !== today) {
-        queue = doctorQueueStatus[queueKey] = { 
-            currentNumber: 0, 
-            totalPatients: todayAppointments.length, 
-            date: today 
-        };
-    } else {
-        // Update total patients count
-        queue.totalPatients = todayAppointments.length;
-    }
-    
-    // Get current patient info (next to be served), skipping absent ones
-    const currentPatient = todayAppointments.find(app => 
-        app.queueNumber > queue.currentNumber && app.status !== 'Absent'
-    );
-    
-    // Get next patient info (after current), also skipping absent ones
-    const nextPatient = todayAppointments.find(app => 
-        currentPatient && app.queueNumber > currentPatient.queueNumber && app.status !== 'Absent'
-    );
-    
-    res.json({
-        currentNumber: queue.currentNumber,
-        totalPatients: queue.totalPatients,
-        date: queue.date,
-        currentPatient: currentPatient ? {
-            name: currentPatient.patientName,
-            queueNumber: currentPatient.queueNumber,
-            time: currentPatient.time,
-            status: currentPatient.status
-        } : null,
-        nextPatient: nextPatient ? {
-            name: nextPatient.patientName,
-            queueNumber: nextPatient.queueNumber,
-            time: nextPatient.time,
-            status: nextPatient.status
-        } : null,
-        isCompleted: queue.currentNumber >= queue.totalPatients,
-        allAppointments: todayAppointments.map(app => ({
-            queueNumber: app.queueNumber,
-            patientName: app.patientName,
-            status: app.status,
-            time: app.time
-        }))
-    });
-});
-
-// Enhanced patient queue status API
-app.get("/api/patient-queue-status/:patientId", (req, res) => {
+app.get("/admin/patient-details/:patientId", async (req, res) => {
+    // This route is correct from the previous step.
     const { patientId } = req.params;
-    const today = new Date().toISOString().slice(0, 10);
-    
-    // Find patient's appointment today
-    const patientAppointment = appointments.find(app => 
-        app.patientId == patientId && app.date === today
-    );
-    
-    if (!patientAppointment) {
-        return res.json({ 
-            hasAppointment: false,
-            message: "No appointment found for today"
-        });
-    }
-    
-    const doctorId = patientAppointment.doctorId;
-    const clinicId = patientAppointment.clinicId;
-    const queueKey = `${doctorId}_${clinicId}`;
-    let queue = doctorQueueStatus[queueKey];
-    
-    // Initialize queue if it doesn't exist
-    if (!queue || queue.date !== today) {
-        const todayAppointments = appointments.filter(app => 
-            app.doctorId == doctorId && app.clinicId == clinicId && app.date === today
-        );
+    const { adminId } = req.query;
+    try {
+        const patientRes = await db.query("SELECT * FROM patients WHERE id = $1", [patientId]);
+        if (patientRes.rows.length === 0) return res.status(404).send("Patient not found");
         
-        queue = doctorQueueStatus[queueKey] = { 
-            currentNumber: 0, 
-            totalPatients: todayAppointments.length, 
-            date: today 
-        };
+        const appointmentsRes = await db.query("SELECT * FROM appointments WHERE patient_id = $1 ORDER BY date DESC, time DESC", [patientId]);
+        
+        res.render("admin-patient-details.ejs", { 
+            patient: patientRes.rows[0], 
+            appointments: appointmentsRes.rows, 
+            adminId 
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error fetching patient details.");
     }
-    
-    const patientsAhead = Math.max(0, patientAppointment.queueNumber - queue.currentNumber - 1);
-    
-    let status = 'Waiting';
-    let message = '';
-    
-    if (patientAppointment.status === 'Done') {
-        status = 'Completed';
-        message = 'Your consultation is completed';
-    } else if (patientAppointment.status === 'Absent') {
-        status = 'Missed';
-        message = 'You missed your appointment';
-    } else if (patientAppointment.queueNumber <= queue.currentNumber) {
-        status = 'Called';
-        message = 'Your number has been called - please check with reception';
-    } else if (patientAppointment.queueNumber === queue.currentNumber + 1) {
-        status = 'Next';
-        message = 'You are next! Please be ready';
-    } else {
-        status = 'Waiting';
-        message = `${patientsAhead} patients ahead of you`;
-    }
-    
-    res.json({
-        hasAppointment: true,
-        queueNumber: patientAppointment.queueNumber,
-        currentNumber: queue.currentNumber,
-        totalPatients: queue.totalPatients,
-        patientsAhead: patientsAhead,
-        status: status,
-        message: message,
-        doctorName: patientAppointment.doctorName,
-        appointmentTime: patientAppointment.time,
-        appointmentStatus: patientAppointment.status,
-        estimatedWaitMinutes: patientsAhead * 15 // 15 minutes per patient
-    });
 });
 
-// Additional helper API for queue overview
-app.get("/api/queue-overview/:doctorId/:clinicId", (req, res) => {
-    const { doctorId, clinicId } = req.params;
-    const { date } = req.query;
-    const targetDate = date || new Date().toISOString().slice(0, 10);
-    
-    const doctorAppointments = appointments.filter(app => 
-        app.doctorId == doctorId && app.clinicId == clinicId && app.date === targetDate
-    ).sort((a, b) => a.queueNumber - b.queueNumber);
-    
-    const queueKey = `${doctorId}_${clinicId}`;
-    const queue = doctorQueueStatus[queueKey];
-    const currentNumber = (queue && queue.date === targetDate) ? queue.currentNumber : 0;
-    
-    const overview = doctorAppointments.map(app => ({
-        queueNumber: app.queueNumber,
-        patientName: app.patientName,
-        time: app.time,
-        status: app.status,
-        isCompleted: app.queueNumber <= currentNumber,
-        isCurrent: app.queueNumber === currentNumber + 1,
-        isNext: app.queueNumber === currentNumber + 2
-    }));
-    
-    res.json({
-        date: targetDate,
-        currentNumber: currentNumber,
-        totalPatients: doctorAppointments.length,
-        appointments: overview,
-        isQueueActive: currentNumber > 0 || doctorAppointments.length > 0
-    });
+app.post("/admin/add-clinic", async (req, res) => {
+    const { name, address, phone, receptionistName, username, password, adminId } = req.body;
+    try {
+        const newClinicRes = await db.query(
+            "INSERT INTO clinics (name, address, phone) VALUES ($1, $2, $3) RETURNING id",
+            [name, address, phone]
+        );
+        const newClinicId = newClinicRes.rows[0].id;
+
+        await db.query(
+            "INSERT INTO receptionists (name, clinic_id, username, password) VALUES ($1, $2, $3, $4)",
+            [receptionistName, newClinicId, username, password]
+        );
+
+        res.redirect(`/dashboard/admin?userId=${adminId}`);
+    } catch(err) {
+        console.error(err);
+        res.status(500).send("Error adding clinic.");
+    }
 });
+
+app.post("/admin/delete-clinic", async (req, res) => {
+    const { clinicId, adminId } = req.body;
+    try {
+        // Need to delete from referencing tables first if ON DELETE CASCADE is not set for all foreign keys.
+        await db.query("DELETE FROM receptionists WHERE clinic_id = $1", [clinicId]);
+        await db.query("DELETE FROM clinics WHERE id = $1", [clinicId]); // This will cascade to schedules, requests, etc.
+        res.redirect(`/dashboard/admin?userId=${adminId}`);
+    } catch(err) {
+        console.error(err);
+        res.status(500).send("Error deleting clinic.");
+    }
+});
+
+app.post("/admin/add-doctor", async (req, res) => {
+    const { name, specialty, username, password, phone, dailyLimit, adminId } = req.body;
+    try {
+        const newDoctorRes = await db.query(
+            "INSERT INTO doctors (name, specialty, username, password, phone, daily_limit) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+            [name, specialty, username, password, phone, dailyLimit]
+        );
+        const newDoctorId = newDoctorRes.rows[0].id;
+        // Note: Logic for assigning to multiple clinics from the admin form would need to be added here if required.
+        res.redirect(`/dashboard/admin?userId=${adminId}`);
+    } catch(err) {
+        console.error(err);
+        res.status(500).send("Error adding doctor.");
+    }
+});
+
+app.post("/admin/delete-doctor", async (req, res) => {
+    const { doctorId, adminId } = req.body;
+    try {
+        await db.query("DELETE FROM doctors WHERE id = $1", [doctorId]); // Cascades will handle related data
+        res.redirect(`/dashboard/admin?userId=${adminId}`);
+    } catch(err) {
+        console.error(err);
+        res.status(500).send("Error deleting doctor.");
+    }
+});
+
+app.post("/admin/delete-patient", async (req, res) => {
+    const { patientId, adminId } = req.body;
+    try {
+        await db.query("DELETE FROM appointments WHERE patient_id = $1", [patientId]);
+        await db.query("DELETE FROM patients WHERE id = $1", [patientId]);
+        res.redirect(`/dashboard/admin?userId=${adminId}`);
+    } catch(err) {
+        console.error(err);
+        res.status(500).send("Error deleting patient.");
+    }
+});
+
+
+// --- API Routes for Live Search/Queue (Example) ---
+app.get("/api/doctors", async (req, res) => {
+    const { name, specialty, clinic, date } = req.query;
+    try {
+        let query = `
+            SELECT DISTINCT d.id, d.name, d.specialty, ds.start_time, ds.end_time, c.id as clinic_id, c.name as clinic_name 
+            FROM doctors d 
+            JOIN doctor_schedules ds ON d.id = ds.doctor_id
+            JOIN clinics c ON ds.clinic_id = c.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramIndex = 1;
+
+        if (name) {
+            query += ` AND d.name ILIKE $${paramIndex++}`;
+            params.push(`%${name}%`);
+        }
+        if (specialty) {
+            query += ` AND d.specialty ILIKE $${paramIndex++}`;
+            params.push(`%${specialty}%`);
+        }
+        if (clinic) {
+            query += ` AND (c.name ILIKE $${paramIndex} OR c.address ILIKE $${paramIndex})`;
+            params.push(`%${clinic}%`);
+            paramIndex++;
+        }
+        
+        const results = await db.query(query, params);
+
+        // This simplified version just returns doctors. Slot calculation would require more logic.
+        const doctors = results.rows.reduce((acc, row) => {
+            let doctor = acc.find(d => d.id === row.id);
+            if (!doctor) {
+                doctor = { id: row.id, name: row.name, specialty: row.specialty, schedules: [] };
+                acc.push(doctor);
+            }
+            doctor.schedules.push({
+                clinicId: row.clinic_id,
+                clinic: { name: row.clinic_name },
+                startTime: row.start_time,
+                endTime: row.end_time
+            });
+            return acc;
+        }, []);
+
+        res.json(doctors);
+    } catch(err) {
+        console.error("API Error:", err);
+        res.status(500).json({ error: "Failed to fetch doctors" });
+    }
+});
+
+app.get("/api/queue-status/:doctorId/:clinicId", async (req, res) => {
+    const { doctorId, clinicId } = req.params;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+        const query = `
+            SELECT status, queue_number 
+            FROM appointments 
+            WHERE doctor_id = $1 AND clinic_id = $2 AND date = $3`;
+        const appointmentsRes = await db.query(query, [doctorId, clinicId, today]);
+        const appointments = appointmentsRes.rows;
+
+        const doneAppointments = appointments.filter(a => a.status === 'Done');
+        const currentNumber = doneAppointments.length;
+        
+        res.json({
+            currentNumber: currentNumber,
+            totalPatients: appointments.length
+        });
+
+    } catch(err) {
+        console.error("Queue API Error:", err);
+        res.status(500).json({ error: "Failed to fetch queue status" });
+    }
+});
+
 
 // --- Server ---
 app.listen(port, () => {
     console.log(`Clinic Appointment System running on http://localhost:${port}`);
 });
+

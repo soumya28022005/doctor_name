@@ -31,24 +31,26 @@
         
         <% if(appointments.length > 0) { %>
             <% appointments.forEach(app => { %>
+                <!-- Notice the change from app.doctorName to app.doctor_name, etc. -->
                 <div class="appointment-item" style="position: relative; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; background: #f8fafc;">
                     <!-- Appointment Header -->
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                         <div>
-                            <h4 style="color: #1e293b; margin: 0 0 0.5rem 0;"><%= app.doctorName %></h4>
+                            <h4 style="color: #1e293b; margin: 0 0 0.5rem 0;"><%= app.doctor_name %></h4>
                             <p style="color: #64748b; margin: 0; font-size: 0.95rem;">
-                                📅 <%= app.date %> at <%= app.time %> | 📍 <%= app.clinicName %>
+                                📅 <%= new Date(app.date).toLocaleDateString() %> at <%= app.time %> | 📍 <%= app.clinic_name %>
                             </p>
                         </div>
                         <div style="text-align: right;">
                             <span style="background: #3b82f6; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: bold; font-size: 0.9rem;">
-                                Queue #<%= app.queueNumber %>
+                                Queue #<%= app.queue_number %>
                             </span>
                         </div>
                     </div>
 
                     <!-- Live Queue Status -->
-                   <div class="live-queue-status" data-appointment-id="<%= app.id %>" data-doctor-id="<%= app.doctorId %>" data-clinic-id="<%= app.clinicId %>" data-queue-number="<%= app.queueNumber %>">
+                    <!-- CORRECTED: Using snake_case for data attributes -->
+                   <div class="live-queue-status" data-appointment-id="<%= app.id %>" data-doctor-id="<%= app.doctor_id %>" data-clinic-id="<%= app.clinic_id %>" data-queue-number="<%= app.queue_number %>">
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
@@ -100,6 +102,7 @@
 
         try {
             const response = await fetch(`/api/doctors?${query.join('&')}`);
+            if (!response.ok) throw new Error('Network response was not ok');
             const doctors = await response.json();
 
             resultsContainer.innerHTML = '';
@@ -129,6 +132,7 @@
                 resultsContainer.innerHTML = '<p>No doctors found with the specified criteria.</p>';
             }
         } catch (error) {
+            console.error('Fetch error:', error);
             resultsContainer.innerHTML = '<p style="color: red;">Error loading doctors. Please try again.</p>';
         }
     }
@@ -137,12 +141,13 @@
         const queueElements = document.querySelectorAll('.live-queue-status');
         for (const element of queueElements) {
             const doctorId = element.dataset.doctorId;
-            const clinicId = element.dataset.clinicId; // Make sure you add data-clinic-id to your div
+            const clinicId = element.dataset.clinicId;
             const queueNumber = parseInt(element.dataset.queueNumber);
 
             try {
-                // Corrected API endpoint with clinicId
+                // This API call should now work because doctorId and clinicId are correct
                 const response = await fetch(`/api/queue-status/${doctorId}/${clinicId}`);
+                 if (!response.ok) throw new Error(`API returned status ${response.status}`);
                 const queueData = await response.json();
 
                 const statusText = element.querySelector('.current-status-text');
@@ -184,6 +189,7 @@
                 indicator.style.background = indicatorColor;
 
             } catch (error) {
+                console.error("Queue Status Error:", error); // Log the actual error
                 const statusText = element.querySelector('.current-status-text');
                 const queueInfo = element.querySelector('.queue-info');
                 statusText.textContent = '❌ Unable to load queue status';
@@ -195,6 +201,7 @@
 
     // Initial load and periodic updates
     document.addEventListener('DOMContentLoaded', () => {
+        searchDoctors(); // Also run search on page load
         updateLiveQueueStatus();
         // Update every 15 seconds for real-time experience
         setInterval(updateLiveQueueStatus, 15000);

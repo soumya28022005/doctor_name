@@ -14,8 +14,8 @@
                 <li class="appointment-item">
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
                         <div style="flex-grow: 1;">
-                            <strong>Dr. <%= req.doctorName %></strong> (<%= req.doctorSpecialty %>) wants to join.<br>
-                            <small>Proposed Schedule: <%= req.schedule.startTime %> - <%= req.schedule.endTime %> on <%= req.schedule.days %></small>
+                            <strong>Dr. <%= req.doctor_name %></strong> (<%= req.doctor_specialty %>) wants to join.<br>
+                            <small>Proposed Schedule: <%= req.start_time %> - <%= req.end_time %> on <%= req.days %></small>
                         </div>
                         <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
                             <form action="/receptionist/handle-join-request" method="POST">
@@ -201,7 +201,7 @@
 
             <% if(typeof invitations !== 'undefined') { %>
                 <% invitations.forEach(inv => { %>
-                    <% const invitedDoctor = allDoctors.find(d => d.id === inv.doctorId); %>
+                    <% const invitedDoctor = allDoctors.find(d => d.id === inv.doctor_id); %>
                     <% if (invitedDoctor) { %>
                         <li class="appointment-item">
                             <div style="display: flex; justify-content: space-between; align-items: center;">

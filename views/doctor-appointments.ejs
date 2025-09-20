@@ -8,8 +8,8 @@
         <ol>
             <% appointments.forEach(app => { %>
                 <li>
-                    <strong>Patient:</strong> <%= app.patientName %><br>
-                    <strong>Date:</strong> <%= app.date %> at <%= app.time %><br>
+                    <strong>Patient:</strong> <%= app.patient_name %><br>
+                    <strong>Date:</strong> <%= new Date(app.date).toLocaleDateString() %> at <%= app.time %><br>
                     <strong>Status:</strong> 
                     <span class="<%= app.status === 'Confirmed' ? 'text-green-600' : 'text-red-600' %>">
                        <%= app.status %>

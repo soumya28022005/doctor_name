@@ -12,7 +12,7 @@
                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
                             <strong><%= c.name %></strong> - <%= c.address %><br><strong>Phone:</strong> <%= c.phone %><br>
-                            <% const receptionist = receptionists.find(r => r.clinicId === c.id); %>
+                            <% const receptionist = receptionists.find(r => r.clinic_id === c.id); %>
                             <% if (receptionist) { %>
                                 <small>Receptionist: <%= receptionist.name %> | User: <%= receptionist.username %> | Pass: <%= receptionist.password %></small>
                             <% } else { %>
@@ -114,7 +114,9 @@
                 <li class="appointment-item">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <strong><%= p.name %></strong><br><strong>Phone:</strong> <%= p.mobile %><br>
+                            <a href="/admin/patient-details/<%= p.id %>?adminId=<%= admin.id %>" target="_blank">
+                                <strong><%= p.name %></strong>
+                            </a><br><strong>Phone:</strong> <%= p.mobile %><br>
                             <small>User: <%= p.username %> | Pass: <%= p.password %></small>
                         </div>
                         <form action="/admin/delete-patient" method="POST" style="display:inline;">
@@ -152,14 +154,15 @@
         </thead>
         <tbody>
             <%
-            const today = new Date().toISOString().slice(0, 10);
-            const todaysAppointments = appointments.filter(a => a.date === today);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todaysAppointments = appointments.filter(a => new Date(a.date).setHours(0,0,0,0) === today.getTime());
             %>
             <% if(todaysAppointments.length > 0) { %>
                 <% todaysAppointments.forEach(a => { %>
                     <tr>
-                        <td><%= a.patientName %></td>
-                        <td><%= a.doctorName %></td>
+                        <td><%= a.patient_name %></td>
+                        <td><%= a.doctor_name %></td>
                         <td><%= a.time %></td>
                         <td><%= a.status %></td>
                     </tr>
@@ -272,4 +275,3 @@ function filterTable(inputId, tableId) {
 </script>
 
 <%- include('partials/footer.ejs') %>
-
