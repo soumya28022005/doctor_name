@@ -123,6 +123,7 @@
                     <% allDoctors.forEach(doctor => { %>
                         <option value="<%= doctor.id %>" data-username="<%= doctor.username.toLowerCase() %>">
                             <%= doctor.name %> (Username: <%= doctor.username %>)
+                            Phone Number: <%= doctor.phone %>
                         </option>
                     <% }) %>
                 </select>
