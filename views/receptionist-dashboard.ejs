@@ -173,55 +173,56 @@
     </div>
 
     <div class="card">
-        <h3>Doctors Available at <%= clinic.name %> (<%= doctors.length %>)</h3>
-        <input type="text" id="doctorSearch" onkeyup="filterList('doctorSearch', 'doctorList')" placeholder="Search doctor by name..." class="form-block" style="width: 100%; margin-bottom: 1rem;">
-        
-        <ul id="doctorList" class="appointment-list">
-            <% if(doctors.length > 0 || (typeof invitations !== 'undefined' && invitations.length > 0)) { %>
-                <% doctors.forEach(doc => { %>
-                    <li class="appointment-item">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="flex-grow: 1;">
-                                <a href="/receptionist/doctor-appointments/<%= doc.id %>?receptionistId=<%= receptionist.id %>" style="text-decoration: none; color: inherit;">
-                                    <strong><%= doc.name %></strong>
-                                </a> 
-                                (<%= doc.specialty %>)<br>
-                                <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
-                                <small>Days: <%= doc.schedule.days %></small>
-                            </div>
-                            <form action="/receptionist/delete-doctor" method="POST" onsubmit="return confirm('Are you sure you want to delete this doctor? This action cannot be undone.');">
-                                <input type="hidden" name="doctorId" value="<%= doc.id %>">
-                                <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
-                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                            </form>
+    <h3>Doctors Available at <%= clinic.name %> (<%= doctors.length %>)</h3>
+    <input type="text" id="doctorSearch" onkeyup="filterList('doctorSearch', 'doctorList')" placeholder="Search doctor by name..." class="form-block" style="width: 100%; margin-bottom: 1rem;">
+    
+    <ul id="doctorList" class="appointment-list">
+        <% if(doctors.length > 0 || (typeof invitations !== 'undefined' && invitations.length > 0)) { %>
+            <% doctors.forEach(doc => { %>
+                <li class="appointment-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex-grow: 1;">
+                            <a href="/receptionist/doctor-appointments/<%= doc.id %>?receptionistId=<%= receptionist.id %>" style="text-decoration: none; color: inherit;">
+                                <strong><%= doc.name %></strong>
+                            </a> 
+                            (<%= doc.specialty %>)<br>
+                            <small>Phone: <%= doc.phone %></small><br>
+                            <small>Schedule: <%= doc.schedule.startTime %> - <%= doc.schedule.endTime %></small><br>
+                            <small>Days: <%= doc.schedule.days %></small>
                         </div>
-                    </li>
-                <% }) %>
+                        <form action="/receptionist/delete-doctor" method="POST" onsubmit="return confirm('Are you sure you want to delete this doctor? This action cannot be undone.');">
+                            <input type="hidden" name="doctorId" value="<%= doc.id %>">
+                            <input type="hidden" name="receptionistId" value="<%= receptionist.id %>">
+                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                        </form>
+                    </div>
+                </li>
+            <% }) %>
 
-                <% if(typeof invitations !== 'undefined') { %>
-                    <% invitations.forEach(inv => { %>
-                        <% const invitedDoctor = allDoctors.find(d => d.id === inv.doctorId); %>
-                        <% if (invitedDoctor) { %>
-                            <li class="appointment-item">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div style="flex-grow: 1;">
-                                        <strong><%= invitedDoctor.name %></strong> (<%= invitedDoctor.specialty %>)
-                                        <span style="background: #f59e0b; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: bold; font-size: 0.9rem; margin-left: 10px;">
-                                            Pending
-                                        </span>
-                                        <br>
-                                        <small>Invited Schedule: <%= inv.schedule.startTime %> - <%= inv.schedule.endTime %> on <%= inv.schedule.days %></small> 
-                                    </div>
+            <% if(typeof invitations !== 'undefined') { %>
+                <% invitations.forEach(inv => { %>
+                    <% const invitedDoctor = allDoctors.find(d => d.id === inv.doctorId); %>
+                    <% if (invitedDoctor) { %>
+                        <li class="appointment-item">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex-grow: 1;">
+                                    <strong><%= invitedDoctor.name %></strong> (<%= invitedDoctor.specialty %>)
+                                    <span style="background: #f59e0b; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: bold; font-size: 0.9rem; margin-left: 10px;">
+                                        Pending
+                                    </span>
+                                    <br>
+                                    <small>Invited Schedule: <%= inv.schedule.startTime %> - <%= inv.schedule.endTime %> on <%= inv.schedule.days %></small> 
                                 </div>
-                            </li>
-                        <% } %>
-                    <% }) %>
-                <% } %>
-            <% } else { %>
-                <p>No doctors assigned to <%= clinic.name %>.</p>
+                            </div>
+                        </li>
+                    <% } %>
+                <% }) %>
             <% } %>
-        </ul>
-    </div>
+        <% } else { %>
+            <p>No doctors assigned to <%= clinic.name %>.</p>
+        <% } %>
+    </ul>
+</div>
 </div>
 
 <script>

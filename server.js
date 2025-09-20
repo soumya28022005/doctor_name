@@ -1,5 +1,6 @@
 import express from "express";
 import bodyParser from "body-parser";
+import pg from "pg";
 
 const app = express();
 const port = 3000;
@@ -65,6 +66,15 @@ let doctorQueueStatus = {
 
 // Add this new array near your other data storage arrays
 let receptionistInvitations = [];
+// connect data
+const db = new pg.Pool({
+    user: "postgres", // Your PostgreSQL username
+    host: "localhost",
+    database: "clinic_db", // The database you created
+    password: "Soumya2802@", // The password for your user
+    port: 5432,
+});
+db.connect();
 
 
 // --- ID Counters ---
@@ -583,8 +593,8 @@ app.post("/receptionist/handle-join-request", (req, res) => {
 
 // --- Admin Actions ---
 app.post("/admin/add-doctor", (req, res) => {
-    const { name, specialty, username, password, dailyLimit, adminId, clinicIds, customAddress, customStartTime, customEndTime, customDays } = req.body;
-    const newDoctor = { id: ++last_doctors_id, name, specialty, username, password, dailyLimit: parseInt(dailyLimit) || 20 };
+    const { name, specialty, username, password, phone, dailyLimit, adminId, clinicIds, customAddress, customStartTime, customEndTime, customDays } = req.body;
+    const newDoctor = { id: ++last_doctors_id, name, specialty, username, password, phone, dailyLimit: parseInt(dailyLimit) || 20 };
     doctors.push(newDoctor);
 
     if (clinicIds) {
@@ -667,6 +677,8 @@ app.post("/admin/delete-clinic", (req, res) => {
 app.post("/admin/delete-doctor", (req, res) => {
     const { doctorId, adminId } = req.body;
     doctors = doctors.filter(d => d.id != doctorId);
+    // Also delete associated schedules
+    doctorSchedules = doctorSchedules.filter(s => s.doctorId != doctorId);
     res.redirect(`/dashboard/admin?userId=${adminId}`);
 });
 
@@ -708,7 +720,7 @@ app.post("/admin/add-appointment", (req, res) => {
 
     // --- SLOT OVERLAP CHECK ---
     const newAppStartTime = timeToMinutes(time);
-    const newAppEndTime = newAppStartTime + doctor.consultationDuration;
+    const newAppEndTime = newAppStartTime + (doctor.consultationDuration || 15);
 
     const conflictingAppointment = appointments.find(app => {
         if (app.patientId != patientId || app.date !== date || app.status === 'Done' || app.status === 'Absent') {
@@ -716,7 +728,7 @@ app.post("/admin/add-appointment", (req, res) => {
         }
         const existingDoctor = doctors.find(d => d.id === app.doctorId);
         const existingAppStartTime = timeToMinutes(app.time);
-        const existingAppEndTime = existingAppStartTime + existingDoctor.consultationDuration;
+        const existingAppEndTime = existingAppStartTime + (existingDoctor.consultationDuration || 15);
 
         return newAppStartTime < existingAppEndTime && newAppEndTime > existingAppStartTime;
     });

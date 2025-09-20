@@ -65,44 +65,45 @@
         </ul>
         <h4 style="margin-top: 2rem;">Add New Doctor</h4>
         <form action="/admin/add-doctor" method="POST" class="form-block">
-            <input type="hidden" name="adminId" value="<%= admin.id %>">
-            <input type="text" name="name" placeholder="Doctor Name" required>
-            <input type="text" name="specialty" placeholder="Specialty" required>
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <input type="number" name="dailyLimit" placeholder="Daily Patient Limit" required>
+    <input type="hidden" name="adminId" value="<%= admin.id %>">
+    <input type="text" name="name" placeholder="Doctor Name" required>
+    <input type="text" name="specialty" placeholder="Specialty" required>
+    <input type="text" name="username" placeholder="Username" required>
+    <input type="password" name="password" placeholder="Password" required>
+    <input type="text" name="phone" placeholder="Mobile Number" required>
+    <input type="number" name="dailyLimit" placeholder="Daily Patient Limit" required>
 
-            <div style="margin-top: 1rem;">
-                <label><strong>Assign to Existing Clinics:</strong></label><br>
-                <% clinics.forEach(c => { %>
-                    <div class="form-block">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: normal;">
-                            <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %>
-                        </label>
-                        <label>Start Time</label>
-                        <input type="time" name="startTime_<%= c.id %>" >
-                        <label>End Time</label>
-                        <input type="time" name="endTime_<%= c.id %>" >
-                        <input type="text" name="days_<%= c.id %>" placeholder="e.g., Monday, Wednesday">
-                    </div>
-                <% }) %>
+    <div style="margin-top: 1rem;">
+        <label><strong>Assign to Existing Clinics:</strong></label><br>
+        <% clinics.forEach(c => { %>
+            <div class="form-block">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: normal;">
+                    <input type="checkbox" name="clinicIds" value="<%= c.id %>"> <%= c.name %>
+                </label>
+                <label>Start Time</label>
+                <input type="time" name="startTime_<%= c.id %>" >
+                <label>End Time</label>
+                <input type="time" name="endTime_<%= c.id %>" >
+                <input type="text" name="days_<%= c.id %>" placeholder="e.g., Monday, Wednesday">
             </div>
+        <% }) %>
+    </div>
 
-            <div style="margin-top: 1rem;" id="private-clinics-container">
-                <label><strong>Or, Add Private Practice Locations:</strong></label>
-                <div class="clinic-entry form-block" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; align-items: stretch;">
-                    <input type="text" name="customAddress" placeholder="Private Practice Address" style="flex-grow: 1; width: 100%;">
-                    <label>Start Time</label>
-                    <input type="time" name="customStartTime" >
-                    <label>End Time</label>
-                    <input type="time" name="customEndTime" >
-                    <input type="text" name="customDays" placeholder="e.g., Monday, Wednesday" style="width: 100%;">
-                </div>
-            </div>
-            <button type="button" id="add-clinic-btn" class="btn btn-secondary btn-small" style="margin-bottom: 1rem;">+ Add Another Clinic</button>
+    <div style="margin-top: 1rem;" id="private-clinics-container">
+        <label><strong>Or, Add Private Practice Locations:</strong></label>
+        <div class="clinic-entry form-block" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; align-items: stretch;">
+            <input type="text" name="customAddress" placeholder="Private Practice Address" style="flex-grow: 1; width: 100%;">
+            <label>Start Time</label>
+            <input type="time" name="customStartTime" >
+            <label>End Time</label>
+            <input type="time" name="customEndTime" >
+            <input type="text" name="customDays" placeholder="e.g., Monday, Wednesday" style="width: 100%;">
+        </div>
+    </div>
+    <button type="button" id="add-clinic-btn" class="btn btn-secondary btn-small" style="margin-bottom: 1rem;">+ Add Another Clinic</button>
 
-            <button type="submit" class="btn" style="margin-top: 1rem; width: 100%;">Add Doctor</button>
-        </form>
+    <button type="submit" class="btn" style="margin-top: 1rem; width: 100%;">Add Doctor</button>
+</form>
     </div>
 
     <div class="card">
@@ -137,61 +138,61 @@
         </form>
     </div>
     
-
-    <div class="card">
-        <h3>Today's Appointments</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Patient</th>
-                    <th>Doctor</th>
-                    <th>Time</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% 
-                const today = new Date().toISOString().slice(0, 10);
-                const todaysAppointments = appointments.filter(a => a.date === today);
-                %>
-                <% if(todaysAppointments.length > 0) { %>
-                    <% todaysAppointments.forEach(a => { %>
-                        <tr>
-                            <td><%= a.patientName %></td>
-                            <td><%= a.doctorName %></td>
-                            <td><%= a.time %></td>
-                            <td><%= a.status %></td>
-                        </tr>
-                    <% }) %>
-                <% } else { %>
-                    <tr><td colspan="4">No appointments today.</td></tr>
-                <% } %>
-            </tbody>
-        </table>
-        
-        <h4 style="margin-top: 2rem;">Add Appointment (Admin)</h4>
-        <form action="/admin/add-appointment" method="POST" class="form-block">
-             <input type="hidden" name="adminId" value="<%= admin.id %>">
-             <select name="patientId" required>
-                <% patients.forEach(p => { %>
-                    <option value="<%= p.id %>"><%= p.name %></option>
+<div class="card">
+    <h3>Today's Appointments</h3>
+    <input type="text" id="appointmentSearch" onkeyup="filterTable('appointmentSearch', 'appointmentTable')" placeholder="Search for appointments.." class="form-block" style="width: 100%; margin-bottom: 1rem;">
+    <table id="appointmentTable">
+        <thead>
+            <tr>
+                <th>Patient</th>
+                <th>Doctor</th>
+                <th>Time</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <%
+            const today = new Date().toISOString().slice(0, 10);
+            const todaysAppointments = appointments.filter(a => a.date === today);
+            %>
+            <% if(todaysAppointments.length > 0) { %>
+                <% todaysAppointments.forEach(a => { %>
+                    <tr>
+                        <td><%= a.patientName %></td>
+                        <td><%= a.doctorName %></td>
+                        <td><%= a.time %></td>
+                        <td><%= a.status %></td>
+                    </tr>
                 <% }) %>
-             </select>
-             <select name="doctorId" required>
-                <% doctors.forEach(d => { %>
-                    <option value="<%= d.id %>"><%= d.name %></option>
-                <% }) %>
-             </select>
-             <select name="clinicId" required>
-                <% clinics.forEach(c => { %>
-                    <option value="<%= c.id %>"><%= c.name %></option>
-                <% }) %>
-             </select>
-             <input type="date" name="date" required>
-             <input type="time" name="time" required>
-             <button type="submit" class="btn">Add Appointment</button>
-        </form>
-    </div>
+            <% } else { %>
+                <tr><td colspan="4">No appointments today.</td></tr>
+            <% } %>
+        </tbody>
+    </table>
+    
+    <h4 style="margin-top: 2rem;">Add Appointment (Admin)</h4>
+    <form action="/admin/add-appointment" method="POST" class="form-block">
+         <input type="hidden" name="adminId" value="<%= admin.id %>">
+         <select name="patientId" required>
+            <% patients.forEach(p => { %>
+                <option value="<%= p.id %>"><%= p.name %></option>
+            <% }) %>
+         </select>
+         <select name="doctorId" required>
+            <% doctors.forEach(d => { %>
+                <option value="<%= d.id %>"><%= d.name %></option>
+            <% }) %>
+         </select>
+         <select name="clinicId" required>
+            <% clinics.forEach(c => { %>
+                <option value="<%= c.id %>"><%= c.name %></option>
+            <% }) %>
+         </select>
+         <input type="date" name="date" required>
+         <input type="time" name="time" required>
+         <button type="submit" class="btn">Add Appointment</button>
+    </form>
+</div>
 </div>
 
 <script>
@@ -238,6 +239,33 @@ function filterList(inputId, listId) {
             li[i].style.display = "";
         } else {
             li[i].style.display = "none";
+        }
+    }
+}
+
+function filterTable(inputId, tableId) {
+    const input = document.getElementById(inputId);
+    const filter = input.value.toLowerCase();
+    const table = document.getElementById(tableId);
+    const tr = table.getElementsByTagName('tr');
+
+    for (let i = 1; i < tr.length; i++) { // Start from 1 to skip the header row
+        const tds = tr[i].getElementsByTagName("td");
+        let found = false;
+        for (let j = 0; j < tds.length; j++) {
+            const td = tds[j];
+            if (td) {
+                const txtValue = td.textContent || td.innerText;
+                if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (found) {
+            tr[i].style.display = "";
+        } else {
+            tr[i].style.display = "none";
         }
     }
 }
